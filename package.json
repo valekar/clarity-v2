@@ -1,0 +1,30 @@
+{
+  "name": "clarity-v2",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.3.4",
+  "engines": {
+    "node": ">=22.20.0 <23",
+    "pnpm": "12.3.4"
+  },
+  "scripts": {
+    "dev": "turbo run dev --filter=@clarity/web",
+    "dev:web": "pnpm --filter @clarity/web dev",
+    "dev:desktop": "pnpm --filter @clarity/desktop start",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck && tsc -p tsconfig.tools.json --noEmit",
+    "lint": "eslint apps libs scripts",
+    "format:check": "prettier --check 'apps/**/*.{ts,tsx,css,html,json}' 'libs/**/*.{ts,tsx,json}' 'scripts/**/*.ts' 'package.json' 'pnpm-workspace.yaml' 'turbo.json' 'tsconfig.tools.json' 'eslint.config.mjs'",
+    "check:docs": "node --experimental-strip-types scripts/check-docs.ts",
+    "check": "pnpm run check:docs && pnpm run format:check && pnpm run lint && pnpm run typecheck"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.1",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.3.6",
+    "prettier": "3.9.8",
+    "turbo": "2.11.3",
+    "typescript": "6.0.3"
+  }
+}
