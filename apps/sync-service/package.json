@@ -7,10 +7,17 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",
+    "probe:lifecycle": "node lifecycle-probe/run.mjs",
+    "test": "pnpm run build && tsc -p tsconfig.test.json && node --test test-dist/test/*.test.js",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "9.6.0",
     "@types/node": "22.20.1",
     "typescript": "6.0.3"
+  },
+  "dependencies": {
+    "@clarity/contracts": "workspace:*",
+    "better-sqlite3": "13.0.3"
   }
 }

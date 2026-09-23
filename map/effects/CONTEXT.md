@@ -8,9 +8,11 @@ Review the obvious unaffected boundary as well as direct consumers.
 | --- | --- | --- |
 | Scope, folder layout, release order | [Planning workspace](../objects/planning-workspace.md) | [Direction decision](../decisions/2026-09-23-v2-direction.md) |
 | Workspace package/export/build changes | [Foundation shells](../objects/foundation-shells.md) | [Planning workspace](../objects/planning-workspace.md) |
+| PostgreSQL schema, migrations, runtime role grants | [Database owner](../../libs/database/CONTEXT.md) through [Report package](../objects/report-package.md) | [Staff identity](../objects/staff-identity.md), [source fencing](../objects/source-and-service.md) |
 | Polling, uploads, logout continuity | [Source/service](../objects/source-and-service.md) | [Report readiness](../objects/report-package.md) |
 | Hanko, roles, staff disablement | [Staff identity](../objects/staff-identity.md) | [Source pairing](../objects/source-and-service.md), not source study identity |
 | Ready state, viewer, sharing | [Report package](../objects/report-package.md) | [Staff authorization](../objects/staff-identity.md) |
+| Recipient grants, outbox or provider callbacks | [Delivery boundary](../objects/delivery-boundary.md) | [Report package](../objects/report-package.md), [staff access](../objects/staff-identity.md) |
 | Map vocabulary, templates, indexing | [Session maintenance](../processes/session-maintenance.md) | [Schema](../_meta/schema.md) and scripts |
 
 Incoming external consumers: none known for this newly created workspace. Record

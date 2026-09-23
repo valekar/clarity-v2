@@ -1,10 +1,10 @@
 # 01 — Clarity V2 desktop and automatic Orthanc ingestion
 
-> **Version:** 1.1  
+> **Version:** 1.2  
 > **Date:** 2026-09-23  
 > **Author:** Codex, using the Planning Doc Generator and ICM Architect skills  
 > **Goal:** A simple installed staff application with unattended local Orthanc ingestion, a dedicated cloud backend and Hanko staff authentication.  
-> **Status:** Foundation scaffold authorized 2026-09-23; platform proofs, clinical runtime, service installation and deployment pending.
+> **Status:** Synthetic worker crash recovery, Hanko staff web and local Chromium cookie proofs passed; connected ingestion, clinical viewing, installers and deployment pending.
 
 ## Contents
 
@@ -56,8 +56,8 @@ No modification, migration, deletion or replacement of V1 in this plan run. No
 multi-business SaaS, branch switcher, subscriptions/billing, public Orthanc tunnel,
 AI, archive tier, source cleanup, RIS/worklist integration, full offline staff
 editing, Linux installer, browser DICOM intake wizard or universal viewer feature
-parity. Do not add Auth0 unless the contradictory wording in the brief is resolved
-in its favour. Hanko is explicitly selected for V2 now.
+parity. Hanko is the sole V2 staff identity provider; the user resolved the earlier
+Auth0 wording on 23 September 2026.
 
 ### Acceptance snapshot and release slices
 
@@ -176,11 +176,13 @@ administrator credentials. No Docker Desktop is required at the centre.
 
 ### 2.3 Monorepo shape and package ownership — planned
 
-The user authorized a foundation scaffold on 23 September. Create the four
-application boundaries and the first consumed shared UI/config packages now;
-other listed libraries remain planned until a real consumer exists. Each working
-folder receives a short CONTEXT.md describing inputs, responsibility, outputs and
-validation. A buildable shell is not a proven clinical integration.
+The user authorized a foundation scaffold on 23 September and subsequently
+requested phased implementation. The four application boundaries and the
+contracts, domain, UI, database, server, storage, messaging and config libraries
+now exist. The planned imaging library remains to be extracted from the worker's
+bounded DICOM parser. Each working folder receives a short CONTEXT.md describing
+inputs, responsibility, outputs and validation. A buildable shell is not a proven
+clinical integration.
 
 ```text
 clarity-v2/
@@ -325,8 +327,8 @@ responses private/no-store and credentials out of redirects and diagnostics.
 
 The Electron dashboard keeps standard web security. Passkey/recovery support is a
 P0 packaged-app experiment on both OS families. Do not assume Hanko provides a
-general desktop OAuth/PKCE server or verified-mobile claims. The Hanko-vs-Auth0
-wording remains OI-01; no dual-provider work is included by default.
+general desktop OAuth/PKCE server or verified-mobile claims. OI-01 is resolved:
+Hanko alone owns V2 staff authentication.
 
 ### 3.3 Desktop and independent service lifecycle
 
@@ -398,6 +400,10 @@ of affected studies. StableStudy means a quiet period, not guaranteed clinical
 completion. Fetch study/series/instance metadata and an explicit instance manifest;
 never infer completeness from a date filter or a single event. The service starts
 queued uploads immediately; the discovery interval does not delay each queued file.
+Enumerate a bounded page at a time into a draft manifest. Seal a revision only
+after a fresh source inventory/stability check agrees with the assembled member
+set; a quiet-period signal alone cannot seal it. Persist the member set and a
+deterministic digest before advancing the Report's current revision.
 
 Initial enrollment: choose recent/new studies or a bounded backfill window in setup
 (OI-04). Capture the change cursor before initial inventory, perform bounded
@@ -406,6 +412,11 @@ reconciliation catches missed events; a cleared/reset change log, source databas
 replacement or impossible cursor must trigger explicit reconciliation, not silent
 success. Source generation records the reset without creating duplicate logical
 Reports. Do not assume old clinical StudyDate means a newly received study is old.
+On a source reset, retain the logical `(source_id, StudyInstanceUID)` Report and
+previously verified cloud bytes. Treat Orthanc resource IDs as replaceable
+observations; reconcile the new locator and current instance inventory. Missing
+source instances require attention, not deletion of verified cloud files. The
+same SOP UID with different bytes is a conflict and cannot silently replace data.
 
 | Source value | Normalized V2 owner | Rule |
 | --- | --- | --- |
@@ -423,6 +434,13 @@ Private API reads retrieve `/instances/{id}/file`; do not scrape the UI or copy
 Orthanc's internal object-store keys. Compare SOP/study identifiers and checksums
 after transfer; reject same UID with conflicting bytes rather than silently
 overwriting or rewriting DICOM UIDs.
+Although Report identity is scoped to its configured source, the shared cloud
+Orthanc index also sees DICOM UIDs. Check Study/Series/SOP UID ownership across
+the entire cloud index before import. Quarantine a conflicting UID/byte set;
+never merge two source Reports or let Orthanc's deduplication silently decide.
+For the first one-source deployment, reserve each StudyInstanceUID for exactly
+one source Report in a transactional registry. Reject a cross-source duplicate,
+even with identical bytes, until an explicit multi-source isolation design exists.
 
 Sources: [REST/change feed](https://orthanc.uclouvain.be/book/users/rest.html),
 [transfer completeness](https://orthanc.uclouvain.be/book/faq/transfer-atomicity.html).
@@ -451,16 +469,16 @@ sequenceDiagram
     S->>A: Idempotent metadata/upsert and file admission
     A->>D: Bind report/file/source, reserve size and persist upload identity
     A-->>S: Scoped expiring upload authorization
-    S->>O: Upload bounded parts; persist progress locally
+    S->>O: Upload bounded parts and persist progress locally
     S->>A: Request completion with expected file identity
     A->>O: Verify provider completion/object identity
     A->>D: Atomically mark received and enqueue processing
     W->>O: Read and validate bytes, UIDs and digest
-    W->>W: Import into Orthanc; verify indexed stored bytes
+    W->>W: Import into Orthanc and verify indexed stored bytes
     W->>D: Commit imported reference and recompute readiness
     W->>O: Clean only verified temporary intake copy
     S->>A: Reconcile acknowledged result after timeout/restart
-    A-->>S: Durable status; safe to clear local temporary bytes
+    A-->>S: Durable status permits clearing local temporary bytes
 ```
 
 Cloud chooses object keys and enforces installation/source, declared size, allowed
@@ -469,6 +487,10 @@ bucket keys. A reusable admission key returns the same upload instead of allocat
 another object. For multipart, persist upload ID, ordered parts and acknowledgments;
 only the trusted cloud finalizes/completes or aborts provider state. Small-file PUT
 can share the same completion contract. Multipart ETag is not a SHA-256 proof.
+Each admission binds the current device lease/fencing token and gets a unique
+temporary object key. A superseded owner may still hold an unexpired signed URL
+and write that temporary object, but completion, Report mutation and import must
+reject its old fence. Reconcile and clean its orphaned intake object separately.
 
 Use a bounded per-instance spool or reread the source as needed; do not first build
 a ZIP of a whole study. Persist local hashes/part state, verify identity on reread
@@ -485,6 +507,10 @@ use explicit ownership/age checks and separate final-storage prefixes/buckets.
 Report states: `discovered → syncing → processing → ready`, with recoverable
 `needs_attention`. Readiness requires every member of the recorded revision
 manifest verified/indexed, no unresolved conflict, and source stability checks.
+The manifest is draft → sealed, nonempty and immutable once sealed; membership
+is paged and bounded. Compare-and-swap the Report's current revision when sealing
+so an older inventory cannot replace a newer one. Ready requires one sealed exact
+member set and its deterministic digest, not a partial page or estimated count.
 It means the observed revision is complete, not that the scanner can never append.
 Late instances create a new revision and return current Report state to Syncing.
 Already-issued dispatches retain their frozen file set; a deliberate new send is
@@ -506,7 +532,8 @@ database/schema roles; do not map their internal tables into our application ORM
 | `orthanc_sources`, `device_installations` | Source UUID, generation and last sync; paired credential verifier/rotation/status, source-bound lease/fencing; credentials themselves stay on device |
 | `reports` | Unique `(source_id, study_instance_uid)`, source locator and patient snapshot, staff contact fields, current manifest revision, readiness and optimistic version |
 | `report_files` | Report/source linkage, SOP/series UIDs, size/digest, transfer syntax, processing state, final indexed reference; unique source SOP identity; conflicting digest cannot overwrite |
-| `ingestion_batches` | Validated bounded immutable manifest for one observed Report revision; expected membership/count and completion status |
+| `dicom_uid_registry` | Globally unique study/series/SOP ownership in the shared Orthanc index; transactional reservation prevents cross-source merge or conflicting byte import |
+| `ingestion_batches`, `ingestion_batch_files` | Draft-to-sealed bounded manifest, deterministic digest, exact immutable member rows and completion status for one observed Report revision |
 | `ingestion_uploads` | File admission/idempotency, object key, multipart ID/status, byte reservation and expiry; one active owner per file |
 | `doctors` | Directory name/normalized search/mobile, active status and optimistic version; do not make names unique identifiers |
 | `dispatches`, `dispatch_files` | Explicit send idempotency, report revision, contact/message snapshot and immutable authorized file set |
@@ -659,61 +686,61 @@ plan; this document provides research, not permission to execute it.
 
 ## 4. Implementation checklist
 
-All implementation boxes are intentionally unchecked. Evidence must show the
-actual boundary under test; source presence or mock tests do not pass live gates.
+Check a box only after its complete stated acceptance has evidence. Source
+presence or mock tests do not pass live gates.
 
 ### Phase 0 — Prove risky boundaries before building the product
 
-- [ ] P0.1 — Resolve OI-01/02/03/04; record selected source version, target OS/architecture, hosted-cloud interpretation, backfill choice and supported pinned toolchain in this plan.
-- [ ] P0.2 — Prototype packaged Hanko login/logout/recovery on real Windows/macOS with the chosen Elements/backend versions; prove no-access staff registration and optional passkey capability. Owners: `apps/desktop/`, `libs/server/src/auth/`.
-- [ ] P0.3 — Prove a compiled TypeScript service installs, runs after logout/boot, accesses protected credentials and survives crash on both OS families; record wrapper/installer choice and signing prerequisites. Owners: `apps/sync-service/`, `deploy/installers/`.
-- [ ] P0.4 — Measure representative synthetic Orthanc → intake S3 → cloud Orthanc path; verify index/readback, transfer overhead, source reset and late-instance signals. Decide one transport path with evidence before P3.
+- [ ] P0.1 — Record resolved OI-01 and resolve OI-02/03/04; record selected source version, target OS/architecture, hosted-cloud interpretation, backfill choice and supported pinned toolchain in this plan.
+- [ ] P0.2 — Prototype packaged Hanko login/logout/recovery on real Windows/macOS with the chosen Elements/backend versions; prove no-access staff registration and optional passkey capability. Owners: `apps/desktop/`, `libs/server/src/auth/`. [Hosted Electron shell prototype](evidence/17-desktop-hosted-auth-shell.md) built; packaged two-OS login/recovery/passkey proof pending.
+- [ ] P0.3 — Prove a compiled TypeScript service installs, runs after logout/boot, accesses protected credentials and survives crash on both OS families; record wrapper/installer choice and signing prerequisites. Owners: `apps/sync-service/`, `deploy/installers/`. [Disposable macOS foreground proof](evidence/11-macos-lifecycle-probe.md) passed; installed lifecycle and Windows pending.
+- [x] P0.4 — Measure representative synthetic Orthanc → intake S3 → cloud Orthanc path; verify index/readback, transfer overhead, source reset and late-instance signals. Decide one transport path with evidence before P3. [Bounded 769-instance benchmark and baseline signals](evidence/03-ingestion-proof.md) selected private intake → validating worker → cloud Orthanc; centre bandwidth/capacity remains OI-04.
 
 ### Phase 1 — Reproducible monorepo and isolated cloud foundation
 
-Current authorized slice: scaffold the workspace, runnable static Next.js and
-Electron shells, separate compiled service/worker placeholders, shared UI/config,
-lockfile and checks. P1 tasks remain open until their full acceptance evidence
-exists. In particular, placeholders do not prove Hanko, Orthanc, OS service
-lifecycle, Docker production images, migrations or release packaging.
+The implementation request now covers all phases. Work may proceed with synthetic
+data and disposable V2 resources while OI-02/03/04 remain open. P1 tasks stay open
+until their full acceptance evidence exists. A runnable shell or disposable proof
+does not prove Hanko, clinical runtime, OS service lifecycle, production images or
+release packaging.
 
-- [ ] P1.1 — Create planned apps/libs workspaces, pinned packageManager/runtimes, pnpm lockfile, Turbo graph, strict types, formatting/lint and 700-line guard. Prove clean frozen install and no cross-boundary imports/V1 references.
-- [ ] P1.2 — Implement scoped build/dev/typecheck/test commands; deterministic synthetic cache policy and compiled service/package exports. Prove final Node imports outside the source tree.
-- [ ] P1.3 — Create dedicated V2 Docker stack, roles/volumes/networks and controlled migration jobs including Hanko; prove empty DB setup, readiness, replacement persistence and backup restore without touching V1.
-- [ ] P1.4 — Extend ICM cards/contracts as source lands; integrate catalog/link/line/diagram checks in CI. Prove a cold routing walk to each implemented boundary.
+- [x] P1.1 — Create planned apps/libs workspaces, pinned packageManager/runtimes, pnpm lockfile, Turbo graph, strict types, formatting/lint and 700-line guard. Prove clean frozen install and no cross-boundary imports/V1 references. [Expanded workspace evidence](evidence/01-workspace-checks.md) records fresh frozen Docker installs, whole-workspace checks and compiled imports outside the source tree.
+- [x] P1.2 — Implement scoped build/dev/typecheck/test commands; deterministic synthetic cache policy and compiled service/package exports. Prove final Node imports outside the source tree. [Workspace check evidence](evidence/01-workspace-checks.md).
+- [ ] P1.3 — Create dedicated V2 Docker stack, roles/volumes/networks and controlled migration jobs including Hanko; prove empty DB setup, readiness, replacement persistence and backup restore without touching V1. [Disposable stack proof](evidence/07-cloud-stack.md) passed with twelve migrations, fenced role access, connected [device-to-Ready ingestion](evidence/26-connected-ingestion.md), authenticated viewer access and fresh-volume restore; [Hanko protocol proof](evidence/09-hanko-protocol.md) and [Chromium cookie proof](evidence/16-staff-web-hanko.md) passed. Production HTTPS, independent key custody and final hosted topology remain pending.
+- [x] P1.4 — Extend ICM cards/contracts as source lands; integrate catalog/link/line/diagram checks in CI. Prove a cold routing walk to each implemented boundary. [ICM routing and parser evidence](evidence/05-map-routing.md).
 
 ### Phase 2 — Hanko and staff dashboard skeleton
 
-- [ ] P2.1 — Implement Hanko session adapter, normalized identity links, no-access registration and audited first-admin bootstrap. Verify valid/invalid/revoked/wrong-origin sessions and Hanko outage.
-- [ ] P2.2 — Implement admin/staff authorization at every API, staff add/disable and last-admin protection. Use real DB concurrency tests and two real identities.
-- [ ] P2.3 — Build compact Studies/Doctors/Settings navigation and sharing-form skeleton from approved UI primitives; verify labels, keyboard, narrow widths, errors, no patient data leakage and no implicit sends.
+- [x] P2.1 — Implement Hanko session adapter, normalized identity links, no-access registration and audited first-admin bootstrap. Verify valid/invalid/revoked/wrong-origin sessions and Hanko outage. [Two-identity protected web and browser cookie proof](evidence/16-staff-web-hanko.md), [server adapter](evidence/10-hanko-session-adapter.md) and [database-backed guard](evidence/13-staff-access-guard.md) passed. Packaged Electron behaviour remains a separate P0.2 gate.
+- [x] P2.2 — Implement admin/staff authorization at every API, staff add/disable and last-admin protection. Use real DB concurrency tests and two real identities. [Audited SQL concurrency proof](evidence/12-staff-access-database.md) and [two-identity protected web proof](evidence/16-staff-web-hanko.md) passed for all current application APIs; future clinical APIs must enforce the same active membership boundary.
+- [x] P2.3 — Build compact Studies/Doctors/Settings navigation and sharing-form skeleton from approved UI primitives; verify labels, keyboard, narrow widths, errors, no patient data leakage and no implicit sends. [Synthetic UI evidence](evidence/02-staff-ui.md).
 
 ### Phase 3 — Local discovery and durable machine ingestion
 
-- [ ] P3.1 — Implement device pairing/revocation, source binding, lease/fencing and narrow admin-authorized IPC. Prove a staff token cannot act as device and a device cannot administer/view unrelated data.
-- [ ] P3.2 — Implement SQLite schema/checkpoint+queue transaction, Orthanc discovery, initial inventory/replay and periodic reconciliation. Kill at transaction boundaries and prove no lost event/duplicate logical Report.
-- [ ] P3.3 — Implement bounded spool, per-file hashes, signed multipart upload, persisted parts and cloud completion/reconciliation. Test loss after provider acceptance, expired URLs, restart, low disk and changed source bytes.
-- [ ] P3.4 — Implement idempotent Report/file admission and constrained fresh PostgreSQL tables. Test missing optional tags, conflicting UIDs/digests, source reset, duplicate installers and payload tampering.
+- [ ] P3.1 — Implement device pairing/revocation, source binding, lease/fencing and narrow admin-authorized IPC. Prove a staff token cannot act as device and a device cannot administer/view unrelated data. [Disposable PostgreSQL and focused IPC/server proof](evidence/21-device-pairing.md) passed; containerized two-identity pairing, protected credential storage and connected service lease remain pending.
+- [ ] P3.2 — Implement SQLite schema/checkpoint+queue transaction, Orthanc discovery, initial inventory/replay and periodic reconciliation. Kill at transaction boundaries and prove no lost event/duplicate logical Report. [Synthetic inventory evidence](evidence/04-local-discovery.md), [anchored process proof](evidence/14-anchored-inventory.md) and [compiled production-entry restart proof](evidence/19-local-spool-and-loop.md) passed, including reviewed crash/reset fixes and a local singleton lock; connected service-to-Docker-cloud and centre-scale source evidence remain pending.
+- [ ] P3.3 — Implement bounded spool, per-file hashes, signed multipart upload, persisted parts and cloud completion/reconciliation. Test loss after provider acceptance, expired URLs, restart, low disk and changed source bytes. [Local spool/restart and loopback contract proof](evidence/19-local-spool-and-loop.md), [S3 admission proof](evidence/22-upload-admission.md) and one-object [connected admission/completion proof](evidence/26-connected-ingestion.md) passed; connected multipart recovery and real low-disk/source constraints remain pending.
+- [ ] P3.4 — Implement idempotent Report/file admission and constrained fresh PostgreSQL tables. The 13-migration isolated database proof and [connected proof](evidence/26-connected-ingestion.md) cover optional observations, UID/digest reservations, a two-session same-key admission race, retry, source fences, upload verification, Study seal-state reconciliation and Study/manifest API flow. Local sync-service activation, broad duplicate-installer/restart cases and connected multipart recovery remain open; the Compose stack has not yet been rerun against migration 0013.
 
 ### Phase 4 — Cloud processing and staff viewing
 
-- [ ] P4.1 — Adapt validation/import/readback worker to intake objects; commit durable references before cleanup. Crash at every external-effect boundary and prove retry/reconciliation without data loss.
-- [ ] P4.2 — Implement observed revision manifests, readiness and late-instance reopening; test quiet-but-incomplete studies and unchanged frozen dispatch scope.
-- [ ] P4.3 — Integrate OHIF and scoped staff DICOMweb/download gateway; prove CT/MR/nonimage/unsupported-codec states, private caching and source-offline cloud access.
-- [ ] P4.4 — Present actionable sync/source/cloud/capacity states and paginated search. Staff task acceptance: discovered → ready → view without manual intake.
+- [ ] P4.1 — Adapt validation/import/readback worker to intake objects; commit durable references before cleanup. Crash at every external-effect boundary and prove retry/reconciliation without data loss. [Component, scoped-storage and running-worker crash proof](evidence/15-worker-foundation.md) and [connected worker import](evidence/26-connected-ingestion.md) passed for the selected synthetic path. Pre-effect fence checks run immediately before Orthanc POST and completion remains fenced. A unit proof adopts an exact same-SOP/same-hash stale Orthanc effect under a new authorization; PostgreSQL and Orthanc still do not share a transaction, so the full fence-change race and production recovery policy remain open.
+- [ ] P4.2 — Implement bounded draft/sealed observed revision manifests, readiness and late-instance reopening; test partial inventory, stale revision sealing, quiet-but-incomplete studies and unchanged frozen dispatch scope. [Pure decision proof](evidence/08-manifest-decisions.md), [manifest database proof](evidence/18-manifest-persistence.md), the 13-migration late-seal Ready regression and one-object [connected trusted seal](evidence/26-connected-ingestion.md) passed; quiet-incomplete source behavior, late connected reopening and frozen dispatch scope remain pending. The full Compose stack has not yet been rerun against migration 0013.
+- [ ] P4.3 — Integrate OHIF and scoped staff DICOMweb/download gateway; prove CT/MR/nonimage/unsupported-codec states, private caching and source-offline cloud access. [Gateway unit and connected container proof](evidence/25-viewer-and-sharing-ui.md) passed exact QIDO, authorized WADO/bulk data, unrelated UID denial and source-offline Ready API access. Chrome reached the study page but blocked the embedded OHIF frame; browser rendering and CT/MR/nonimage/codec states remain open.
+- [ ] P4.4 — Present actionable sync/source/cloud/capacity states and paginated search. Staff task acceptance: discovered → ready → view without manual intake. [Studies dashboard and browser evidence](evidence/25-viewer-and-sharing-ui.md) passed Hanko sign-in, Ready/source-offline list and navigation to the study page. The OHIF iframe was blocked in Chrome, and automated local discovery-to-view remains open.
 
 ### Phase 5 — Installable staff pilot
 
-- [ ] P5.1 — Produce signed/notarized macOS installer and signed Windows installer with independently managed service, least-privilege data/credential access and visible setup/status. Install on clean real machines.
+- [ ] P5.1 — Produce signed/notarized macOS installer and signed Windows installer with independently managed service, least-privilege data/credential access and visible setup/status. Install on clean real machines. [Inert macOS package scaffold](evidence/20-macos-installer-scaffold.md) passed disposable layout tests; native installation, signing and Windows remain pending.
 - [ ] P5.2 — Exercise close/quit/lock/logout/reboot/sleep/wake/offline/credential-revoke matrix on both OS families. Confirm automatic recovery and one source owner.
-- [ ] P5.3 — Prove signed upgrade, interrupted upgrade, compatible rollback and uninstall preservation of queue/data. Check service/cloud protocol compatibility and no PHI in diagnostics.
+- [ ] P5.3 — Prove signed upgrade, interrupted upgrade, compatible rollback and uninstall preservation of queue/data. Check service/cloud protocol compatibility and no PHI in diagnostics. [Temporary-root script proof](evidence/20-macos-installer-scaffold.md) preserved synthetic queue/spool/config/logs; actual signed/installed upgrade, interruption and compatibility proof remain pending.
 - [ ] P5.4 — Run synthetic end-to-end staff pilot plus measured storage/bandwidth/CPU limits and restore drill. Record pass/fail evidence; obtain centre-specific deployment authority separately.
 
 ### Phase 6 — Sharing release after recipient-policy decision
 
 - [ ] P6.1 — Resolve OI-06 and implement the approved recipient identity/access boundary; no bearer-only fallback. Verify unauthorized access, wrong recipient, expiry and revocation across every content route.
-- [ ] P6.2 — Implement patient mobile, doctor select/add/autofill, message preview, copy/QR and explicit idempotent final Send. Atomically persist contacts snapshot, dispatch files, grants and outbox.
-- [ ] P6.3 — Adapt the chosen messaging provider, signed callbacks, bounded retry and uncertain-send reconciliation. Synthetic provider tests first; real canary only with explicit authorization and provider readiness.
+- [ ] P6.2 — Implement patient mobile, doctor select/add/autofill, message preview, copy/QR and explicit idempotent final Send. Atomically persist contacts snapshot, dispatch files, grants and outbox. [Synthetic doctor directory proof](evidence/23-doctor-directory.md) passed; [sharing UI preview](evidence/25-viewer-and-sharing-ui.md) is present with Send/QR unavailable. Recipient policy and transactional Send remain pending.
+- [ ] P6.3 — Adapt the chosen messaging provider, signed callbacks, bounded retry and uncertain-send reconciliation. Synthetic provider tests first; real canary only with explicit authorization and provider readiness. [In-memory uncertainty/idempotency test](evidence/24-synthetic-messaging.md) passed; durable outbox, actual provider and callbacks remain pending.
 - [ ] P6.4 — Prove intended-recipient view/download, seven-day boundary, in-flight expiry behaviour and late-instance isolation. Validate Windows/macOS staff UI and phone browser journey.
 - [ ] P6.5 — Record release evidence, operational runbook, supported versions, outstanding limits and ICM updates. Keep staff-pilot and external-sharing release status separate.
 
@@ -724,32 +751,33 @@ exists. Use synthetic data; record commands, versions, actual results and limita
 
 | Requirement | Tasks | Evidence owner / observable proof | Current status |
 | --- | --- | --- | --- |
-| BR-01 | P1.1, P1.3 | `01-foundation.md`: V1 hashes unchanged, separate paths/resources | Planning-only preservation checked separately |
-| BR-02 / TR-06 | P0.2, P2.1–P2.2 | `02-staff-auth.md`: two identities, active-role denial, Hanko failures | Pending |
-| BR-03 / TR-04 | P3.2, P3.4 | `03-ingestion.md`: new study without manual record; replay/reset/crash | Pending |
-| BR-04 | P2.3, P4.3–P4.4 | `04-viewing.md`: compact task flow, source disconnected | Pending |
+| BR-01 | P1.1, P1.3 | [Cloud stack proof](evidence/07-cloud-stack.md) and later `01-foundation.md`: V1 hashes unchanged, separate paths/resources | Disposable V2 stack isolated; final deployment pending |
+| BR-02 / TR-06 | P0.2, P2.1–P2.2 | [Hanko protocol](evidence/09-hanko-protocol.md), [server adapter](evidence/10-hanko-session-adapter.md), [staff SQL](evidence/12-staff-access-database.md) and [two-identity web proof](evidence/16-staff-web-hanko.md) | P2.1/P2.2 passed on disposable services; browser and packaged desktop pending |
+| BR-03 / TR-04 | P3.2, P3.4 | [Local discovery foundation](evidence/04-local-discovery.md); later `03-ingestion.md`: new study without manual record; replay/reset/crash | Fenced synthetic queue passed; mutation-safe inventory, running service and cloud admission pending |
+| BR-04 | P2.3, P4.3–P4.4 | `02-staff-ui.md`: synthetic shell; later `04-viewing.md`: connected flow, source disconnected | P2.3 passed; connected viewing pending |
 | BR-05 / BR-06 | P6.2–P6.3 | `06-sharing.md`: contact entry, explicit send, verified provider state | Pending |
 | BR-07 / TR-12 | P6.1, P6.4 | `06-sharing.md`: recipient identity, expiry, frozen scope, bytes retained | Decision + implementation pending |
-| TR-01 | P1.1–P1.2 | `evidence/01-foundation.md`: frozen monorepo build/type checks and package exports | Scaffold checks passed; full P1 pending |
-| TR-02 | P0.3, P5.1–P5.3 | `05-installers.md`: clean OS install/lifecycle/update matrix | Pending |
+| TR-01 | P1.1–P1.2 | `evidence/01-foundation.md` and [workspace checks](evidence/01-workspace-checks.md): frozen install, build/types, package exports | P1.2 passed; full P1/P1.1 pending |
+| TR-02 | P0.3, P5.1–P5.3 | [Mac foreground lifecycle proof](evidence/11-macos-lifecycle-probe.md); later `05-installers.md`: clean OS install/lifecycle/update matrix | Packaged foreground/crash path passed; installed cross-OS lifecycle pending |
 | TR-03 / TR-07 | P3.1, P5.2 | `03-ingestion.md`: outbound-only network and independent credential tests | Pending |
-| TR-05 | P0.4, P3.3, P4.1–P4.2 | `03-ingestion.md`: durable storage plus index/readback before Ready | Pending |
-| TR-08 | P1.3, P3.2–P3.4, P4.1 | Real SQLite/PostgreSQL conflicts, crash recovery and capacity measurements | Pending |
+| TR-05 | P0.4, P3.3, P4.1–P4.2 | [Synthetic path benchmark](evidence/03-ingestion-proof.md), [running worker crash proof](evidence/15-worker-foundation.md) and [manifest decisions](evidence/08-manifest-decisions.md); later connected local admission and viewing | P0.4/P4.1 passed synthetically; centre capacity and connected local admission pending |
+| TR-08 | P1.3, P3.2–P3.4, P4.1 | [PostgreSQL constraint proof](evidence/06-database-foundation.md), [SQLite queue proof](evidence/04-local-discovery.md) and [cloud stack proof](evidence/07-cloud-stack.md); later connected conflicts, crash recovery and capacity | Persistence and isolated cloud proofs passed; service/worker integration pending |
 | TR-09 | P1.3, P5.1–P5.4 | Final images, signed artifacts, isolated restore and operational handoff | Pending |
-| TR-10 | P1.4, P6.5 | Map generator/checks and cold walk; discussion sessions recorded | Planning scaffold exists; runtime mapping pending |
+| TR-10 | P1.4, P6.5 | [Map generator/checks and cold walk](evidence/05-map-routing.md); discussion sessions recorded | P1.4 passed for current owners; release mapping pending |
 | TR-11 | P1.1, P4.1, P4.3, P6.2 | Source provenance, selected ported tests plus new acceptance | Pending |
 
-### Command contract — planned except documentation tools
+### Command contract
 
-The foundation commands are defined in [README](../README.md). Commands for
-integration, packaging and migrations become valid only after their owning
+The current foundation commands are defined in [README](../README.md). Commands
+for integration, packaging and migrations become valid only after their owning
 implementation phases add scripts and acceptance evidence:
 
 | Planned command | Purpose |
 | --- | --- |
 | `pnpm install --frozen-lockfile` | Scaffold workspace install; available after lockfile generation |
-| `pnpm run check` | Scaffold docs/format/lint/types; no clinical test suite yet |
-| `pnpm run build` | Turbo-ordered scaffold web/desktop/service/worker builds |
+| `pnpm run check` | Docs/source-policy/format/lint/types for implemented packages |
+| `pnpm exec turbo run test` | Current source-policy, pure domain and synthetic sync-service tests; later packages join as implemented |
+| `pnpm run build` | Turbo-ordered package and app builds; not clinical acceptance |
 | `pnpm test:integration` | Disposable PostgreSQL/SQLite/object/Orthanc integration |
 | `pnpm test:desktop` | Packaged desktop staff/IPC/session acceptance |
 | `pnpm test:service` | Real OS service lifecycle and recovery suite |
@@ -765,10 +793,10 @@ installer or provider tests. Unimplemented scripts above are not runnable.
 
 | ID | Input / decision | Proposed default and what it gates |
 | --- | --- | --- |
-| OI-01 | Hanko versus literal Auth0 requirement | Hanko only; Orthanc supplies scan payloads. Clarify before adding any Auth0 dependency |
+| OI-01 | Hanko versus literal Auth0 requirement | **Resolved 2026-09-23:** user confirmed Hanko only for V2 staff identity; no Auth0 dependency |
 | OI-02 | Centre OS, architecture, admin-install permission, service host and minimum OS versions | Orthanc host preferred; Windows x64/macOS Apple Silicon first; Intel support needs an explicit matrix |
-| OI-03 | Dedicated cloud host/domain, private bucket, SMTP and capacity | Separate V2 stack, not V1 resource reuse; needed for hosted Hanko and real storage tests |
-| OI-04 | Orthanc version/auth, stable-age behaviour, daily volume, typical/maximum study size and historical intake | Five-minute incremental polling; new/recent studies first; no unbounded archive copy |
+| OI-03 | Dedicated cloud host/domain, private bucket, SMTP and capacity | User specified **synthetic only for now**; separate real V2 stack details remain open for hosted Hanko and storage tests. The disposable [MinIO proof](evidence/03-ingestion-proof.md) does not select a maintained production store |
+| OI-04 | Orthanc version/auth, stable-age behaviour, daily volume, typical/maximum study size and historical intake | User specified **synthetic only for now**; real source details/backfill remain open. Five-minute incremental polling is proposed; no unbounded archive copy |
 | OI-05 | Installer signing identities, service wrapper/packager license and update ownership | Signed installers and coordinated manual upgrade first; gates distribution |
 | OI-06 | Recipient verification method and account requirement | Preserve verified scoped access; staff-only pilot until decided/proven; no automatic bearer-link downgrade |
 | OI-07 | WhatsApp provider account/template/consent workflow and real canary destination | Existing MSG91 integration is a reuse candidate, not live approval |
@@ -785,15 +813,15 @@ are implementation inputs, not claims of completed compatibility.
 
 ### Planning delivery and next action
 
-The initial planning run created the V2 plan, reuse inventory, Hanko research,
-agent rules and ICM map. The authorized follow-up adds a pnpm/Turbo foundation,
-static Next.js and Electron shells, compiled inactive service/worker entries,
-shared UI/config and a generated lockfile. It does not initialize Git, copy
-production data, provision auth, install an OS service, build a signed installer
-or change the existing application.
+The initial planning run created this plan, reuse inventory, Hanko research,
+agent rules and ICM map. The user then authorized parallel implementation of
+all phases. The current synthetic proofs cover the monorepo, staff web access,
+local discovery, selected transport and cloud worker recovery as recorded in
+the checklist. Device pairing, connected upload/admission, trusted manifests,
+scoped viewing and installers are being implemented; the checklist remains the
+acceptance record. No V1 source or data has been changed.
 
-Review this plan and resolve the interpretation of Auth0 and the initial OS/host.
-The next implementation increment should be P0's authentication/service/storage
-proofs, followed by completion of the foundation beyond its current scaffold.
-Do not schedule a full rewrite or
-quote a reliable delivery date until these platform and data-path risks are measured.
+Hanko-only identity is confirmed. The user selected synthetic integration for
+now. Resolve centre OS/host, real Orthanc/cloud details, signing and recipient
+policy before claiming platform, clinic or sharing release acceptance. Do not
+quote a reliable delivery date until those platform and data-path gates pass.

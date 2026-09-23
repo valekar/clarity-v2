@@ -1,0 +1,69 @@
+services:
+  postgres:
+    image: postgres:18.6-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${PG_BOOTSTRAP_PASSWORD:?}
+      POSTGRES_DB: postgres
+      PGDATA: /var/lib/postgresql/18/docker
+    ports:
+      - 127.0.0.1:${PG_PORT:?}:5432
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U postgres -d postgres]
+      interval: 2s
+      timeout: 3s
+      retries: 45
+    networks: [private]
+
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-05-24T17-08-30Z@sha256:a616cd8f37758b0296db62cc9e6af05a074e844cc7b5c0a0e62176d73828d440
+    command: [server, /data, --address, ":9000", --console-address, ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?}
+      MINIO_REGION_NAME: us-east-1
+    ports:
+      - 127.0.0.1:${MINIO_PORT:?}:9000
+    volumes:
+      - minio_data:/data
+    networks: [private]
+
+  minio-init:
+    image: quay.io/minio/mc:RELEASE.2025-05-21T01-59-54Z@sha256:09f93f534cde415d192bb6084dd0e0ddd1715fb602f8a922ad121fd2bf0f8b44
+    entrypoint: [/bin/sh, -ec]
+    command:
+      - |
+        until mc alias set proof http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}" 2>/dev/null; do sleep 1; done
+        mc mb --ignore-existing proof/clarity-v2-proof-intake
+        mc admin policy create proof clarity-v2-intake-worker /proof/worker-intake.json
+        mc admin user add proof "$${WORKER_S3_ACCESS_KEY}" "$${WORKER_S3_SECRET_KEY}"
+        mc admin policy attach proof clarity-v2-intake-worker --user "$${WORKER_S3_ACCESS_KEY}"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?}
+      WORKER_S3_ACCESS_KEY: ${WORKER_S3_ACCESS_KEY:?}
+      WORKER_S3_SECRET_KEY: ${WORKER_S3_SECRET_KEY:?}
+    volumes:
+      - ./minio/worker-intake.json:/proof/worker-intake.json:ro
+    depends_on:
+      minio: { condition: service_started }
+    networks: [private]
+
+  orthanc:
+    image: orthancteam/orthanc:26.8.2@sha256:9758c8702a89abece99fcfe6d5571d5eaae59587e8e1ce36b9aafc8d4f24457b
+    volumes:
+      - ${ORTHANC_CONFIG:?}:/etc/orthanc/00-worker-proof.json:ro
+      - orthanc_data:/var/lib/orthanc/db
+    ports:
+      - 127.0.0.1:${ORTHANC_PORT:?}:8042
+    networks: [private]
+
+networks:
+  private: {}
+
+volumes:
+  postgres_data: {}
+  minio_data: {}
+  orthanc_data: {}

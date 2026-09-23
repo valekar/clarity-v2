@@ -1,0 +1,196 @@
+.workspace {
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: 1.5rem clamp(1rem, 4vw, 3rem) 2.5rem;
+  max-width: 90rem;
+}
+
+.header,
+.toolbar,
+.studyRow,
+.pagination,
+.nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.header {
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #e2e8ef;
+}
+
+.nav {
+  justify-content: flex-start;
+  margin-top: 1rem;
+}
+
+.nav a,
+.pagination a,
+.studyRow a {
+  color: #1e5a95;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.nav a[aria-current="page"] {
+  color: #172b42;
+  text-decoration: underline;
+  text-underline-offset: 0.3rem;
+}
+
+.heading {
+  margin: 2rem 0 1.2rem;
+}
+
+.heading h1 {
+  font-size: clamp(1.8rem, 4vw, 2.4rem);
+}
+
+.heading p,
+.muted,
+.toolbar label,
+.studyMeta {
+  color: #6f7e90;
+}
+
+.toolbar {
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin: 1.5rem 0 1rem;
+}
+
+.search {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end;
+}
+
+.search label {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.search input {
+  width: min(32rem, 70vw);
+  min-height: 2.55rem;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid #cfd8e2;
+  border-radius: 0.45rem;
+  color: #1a2a3c;
+}
+
+.search button {
+  min-height: 2.55rem;
+  padding: 0 1rem;
+  border: 0;
+  border-radius: 0.45rem;
+  background: #1e5a95;
+  color: #fff;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.panel {
+  overflow: hidden;
+  border: 1px solid #e1e7ee;
+  border-radius: 0.75rem;
+  background: #fff;
+}
+
+.studyRow {
+  align-items: flex-start;
+  padding: 1rem 1.2rem;
+  border-bottom: 1px solid #edf0f4;
+}
+
+.studyRow:last-child {
+  border-bottom: 0;
+}
+
+.studyMain {
+  min-width: 0;
+}
+
+.studyMain h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.studyMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+  margin-top: 0.4rem;
+  font-size: 0.76rem;
+}
+
+.status {
+  display: inline-flex;
+  flex: 0 0 auto;
+  padding: 0.3rem 0.55rem;
+  border-radius: 999px;
+  background: #f1f4f7;
+  color: #52657a;
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.ready {
+  background: #e7f5ef;
+  color: #23704d;
+}
+
+.needsAttention {
+  background: #fff2dc;
+  color: #936021;
+}
+
+.empty {
+  padding: 3.5rem 1.5rem;
+  text-align: center;
+}
+
+.empty h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
+}
+
+.pagination {
+  justify-content: flex-end;
+  margin-top: 1rem;
+}
+
+.retry {
+  color: #1e5a95;
+  font-weight: 650;
+}
+
+.viewerFrame {
+  display: block;
+  width: 100%;
+  height: calc(100vh - 12rem);
+  min-height: 34rem;
+  border: 1px solid #d9e1ea;
+  border-radius: 0.6rem;
+  background: #111;
+}
+
+@media (max-width: 640px) {
+  .studyRow {
+    display: grid;
+  }
+
+  .status {
+    justify-self: start;
+  }
+
+  .viewerFrame {
+    height: 70vh;
+    min-height: 24rem;
+  }
+}

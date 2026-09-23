@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>org.clarity-v2.sync-service</string>
+  <key>ProgramArguments</key><array>
+    <string>/Library/Application Support/ClarityV2/SyncService/current/runtime/bin/node</string>
+    <string>/Library/Application Support/ClarityV2/SyncService/current/app/main.js</string>
+    <string>--config</string>
+    <string>/var/db/clarity-v2/sync-service/config.json</string>
+  </array>
+  <key>UserName</key><string>_clarity-sync</string>
+  <key>GroupName</key><string>_clarity-sync</string>
+  <key>WorkingDirectory</key><string>/var/db/clarity-v2/sync-service</string>
+  <key>StandardOutPath</key><string>/var/log/clarity-v2/sync-service/stdout.log</string>
+  <key>StandardErrorPath</key><string>/var/log/clarity-v2/sync-service/stderr.log</string>
+  <key>Umask</key><integer>63</integer>
+  <key>ProcessType</key><string>Background</string>
+  <key>LowPriorityIO</key><true/>
+  <key>ThrottleInterval</key><integer>60</integer>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
+</dict>
+</plist>

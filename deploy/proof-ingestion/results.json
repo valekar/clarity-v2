@@ -1,0 +1,206 @@
+{
+  "proof": "synthetic-local-p0.4",
+  "harness": "disposable Python test harness; production runtime remains TypeScript",
+  "measured_at_utc": "2026-09-23T08:04:05Z",
+  "baseline": {
+    "study_uid": "2.25.289196761212568724793884405718462476237",
+    "instances": [
+      {
+        "sop_uid": "2.25.304005247049287692655143989040586889029",
+        "fixture": "first.dcm",
+        "transfer": {
+          "source_orthanc_id": "9ec5de81-f04dc8e6-3b99d24a-38594566-a778c6aa",
+          "cloud_orthanc_id": "9ec5de81-f04dc8e6-3b99d24a-38594566-a778c6aa",
+          "http_status": 200,
+          "orthanc_status": "Success",
+          "sha256": "ab139bc086f9c51ea1b56904f2d486a70b3dcbd76f9c897cd0397c59355aac64",
+          "file_bytes": 2097884,
+          "source_read_ms": 3.199,
+          "intake_put_ms": 22.134,
+          "intake_readback_ms": 4.335,
+          "cloud_import_ms": 41.169,
+          "cloud_readback_ms": 6.729,
+          "path_elapsed_ms": 89.488,
+          "estimated_path_payload_bytes": 12587304
+        }
+      },
+      {
+        "sop_uid": "2.25.165350224608682016089453914833962568148",
+        "fixture": "late.dcm",
+        "transfer": {
+          "source_orthanc_id": "a3379ec7-950bd7e8-72958e29-b4709d95-7ffa100b",
+          "cloud_orthanc_id": "a3379ec7-950bd7e8-72958e29-b4709d95-7ffa100b",
+          "http_status": 200,
+          "orthanc_status": "Success",
+          "sha256": "504061b98a3ae370dfe472f4346ed8c7ed4f6b157f00894b5b7ce3cd261bacd9",
+          "file_bytes": 2097884,
+          "source_read_ms": 4.428,
+          "intake_put_ms": 16.839,
+          "intake_readback_ms": 4.504,
+          "cloud_import_ms": 29.964,
+          "cloud_readback_ms": 5.586,
+          "path_elapsed_ms": 70.252,
+          "estimated_path_payload_bytes": 12587304
+        }
+      }
+    ],
+    "duplicate_retry": {
+      "orthanc_status": "AlreadyStored",
+      "uid_hash_registry_decision": "duplicate",
+      "file_bytes": 2097884,
+      "cloud_instance_count_after_retry": 1
+    },
+    "uid_conflict": {
+      "same_sop_uid": true,
+      "original_sha256": "ab139bc086f9c51ea1b56904f2d486a70b3dcbd76f9c897cd0397c59355aac64",
+      "conflicting_sha256": "94059b912885cf0e2785c4fe2fcb2a962b9f83632a752ad93786f6d49f4e9dc3",
+      "decision": "conflict",
+      "intake_writes": 0,
+      "rejected_before_intake_or_import": true,
+      "scope": "proof harness UID/hash guard; not production admission code"
+    },
+    "late_instance": {
+      "orthanc_change_type": "NewInstance",
+      "orthanc_change_seq": 5,
+      "source_orthanc_id": "a3379ec7-950bd7e8-72958e29-b4709d95-7ffa100b",
+      "cloud_instance_count": 2
+    },
+    "source_before_reset": {
+      "first_orthanc_id": "9ec5de81-f04dc8e6-3b99d24a-38594566-a778c6aa",
+      "late_orthanc_id": "a3379ec7-950bd7e8-72958e29-b4709d95-7ffa100b",
+      "last_change_seq": 5
+    },
+    "storage_after_cleanup": {
+      "intake": {
+        "object_count": 0,
+        "object_bytes": 0
+      },
+      "cloud_orthanc": {
+        "object_count": 2,
+        "object_bytes": 4195768
+      }
+    }
+  },
+  "source_reset": {
+    "action": "stopped only the proof source and removed only its named Docker volume",
+    "cloud_instances_retained": 2,
+    "cloud_sha256_by_sop_uid": {
+      "2.25.304005247049287692655143989040586889029": "ab139bc086f9c51ea1b56904f2d486a70b3dcbd76f9c897cd0397c59355aac64",
+      "2.25.165350224608682016089453914833962568148": "504061b98a3ae370dfe472f4346ed8c7ed4f6b157f00894b5b7ce3cd261bacd9"
+    },
+    "source_was_empty_after_replacement": true,
+    "empty_source_last_change_seq": 0,
+    "same_study_uid_reingested": "2.25.289196761212568724793884405718462476237",
+    "reingested_instances": [
+      {
+        "sop_uid": "2.25.304005247049287692655143989040586889029",
+        "new_source_orthanc_id": "9ec5de81-f04dc8e6-3b99d24a-38594566-a778c6aa"
+      },
+      {
+        "sop_uid": "2.25.165350224608682016089453914833962568148",
+        "new_source_orthanc_id": "a3379ec7-950bd7e8-72958e29-b4709d95-7ffa100b"
+      }
+    ],
+    "previous_source": {
+      "first_orthanc_id": "9ec5de81-f04dc8e6-3b99d24a-38594566-a778c6aa",
+      "late_orthanc_id": "a3379ec7-950bd7e8-72958e29-b4709d95-7ffa100b",
+      "last_change_seq": 5
+    },
+    "source_after_reset_last_change_seq": 5,
+    "scope": "volume replacement and manual synthetic replay; no production reconciler tested"
+  },
+  "images": {
+    "orthanc": "orthancteam/orthanc@sha256:9758c8702a89abece99fcfe6d5571d5eaae59587e8e1ce36b9aafc8d4f24457b",
+    "minio": "quay.io/minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e"
+  },
+  "benchmark": {
+    "scope": "synthetic disposable Orthanc-to-private-intake-to-cloud-Orthanc journey; not clinical capacity evidence",
+    "run_id": "0c58dc61c76c4e1390f13c946054ec0e",
+    "profiles": [
+      {
+        "profile": "many-small",
+        "instance_count": 512,
+        "target_pixel_bytes_per_instance": 131072,
+        "actual_dicom_file_bytes": 67487638,
+        "actual_edge_bytes": 337438190,
+        "stage_elapsed_ms_sum": {
+          "source_read_ms": 568.5679999999994,
+          "intake_put_ms": 2559.3770000000004,
+          "intake_readback_ms": 973.9230000000016,
+          "cloud_import_ms": 3394.6869999999985,
+          "cloud_readback_ms": 565.2979999999997
+        },
+        "path_latency_ms": {
+          "min": 14.219,
+          "median": 17.654,
+          "p95": 24.34,
+          "max": 86.195
+        },
+        "measured_path_mib_per_second": 6.762,
+        "verified_cloud_instance_count": 512,
+        "study_uid": "2.25.171217149355497097432236791087049479185"
+      },
+      {
+        "profile": "medium",
+        "instance_count": 256,
+        "target_pixel_bytes_per_instance": 2097152,
+        "actual_dicom_file_bytes": 537060310,
+        "actual_edge_bytes": 2685301550,
+        "stage_elapsed_ms_sum": {
+          "source_read_ms": 896.301,
+          "intake_put_ms": 4046.803000000001,
+          "intake_readback_ms": 1567.2070000000008,
+          "cloud_import_ms": 7970.351000000001,
+          "cloud_readback_ms": 724.3479999999998
+        },
+        "path_latency_ms": {
+          "min": 53.853,
+          "median": 59.367999999999995,
+          "p95": 77.178,
+          "max": 300.144
+        },
+        "measured_path_mib_per_second": 31.666,
+        "verified_cloud_instance_count": 256,
+        "study_uid": "2.25.196019074318798460054024480406119318905"
+      },
+      {
+        "profile": "large",
+        "instance_count": 1,
+        "target_pixel_bytes_per_instance": 33554432,
+        "actual_dicom_file_bytes": 33555172,
+        "actual_edge_bytes": 167775860,
+        "stage_elapsed_ms_sum": {
+          "source_read_ms": 44.155,
+          "intake_put_ms": 250.724,
+          "intake_readback_ms": 49.377,
+          "cloud_import_ms": 441.378,
+          "cloud_readback_ms": 21.616
+        },
+        "path_latency_ms": {
+          "min": 815.916,
+          "median": 815.916,
+          "p95": 815.916,
+          "max": 815.916
+        },
+        "measured_path_mib_per_second": 39.221,
+        "verified_cloud_instance_count": 1,
+        "study_uid": "2.25.257228462284089365435700077036951299711"
+      }
+    ],
+    "budgets": {
+      "maximum_instances": 769,
+      "maximum_pixel_bytes": 637534208,
+      "maximum_elapsed_seconds": 1800,
+      "stream_chunk_bytes": 1048576
+    },
+    "totals": {
+      "instances": 769,
+      "actual_dicom_file_bytes": 638103120,
+      "actual_transfer_edge_bytes": 3190515600,
+      "elapsed_seconds": 38.009,
+      "actual_file_mib_per_second": 16.011,
+      "actual_edge_multiplier": 5.0,
+      "all_instances_verified": true
+    }
+  }
+}

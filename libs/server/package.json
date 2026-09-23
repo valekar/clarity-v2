@@ -1,0 +1,28 @@
+{
+  "name": "@clarity/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./dist/index.js",
+    "./auth/hanko-session": "./dist/auth/hanko-session.js",
+    "./auth/require-staff-access": "./dist/auth/require-staff-access.js",
+    "./device/device-credential": "./dist/device/device-credential.js",
+    "./device/device-http-api": "./dist/device/device-http-api.js",
+    "./device/device-pairing": "./dist/device/device-pairing.js",
+    "./device/require-device-access": "./dist/device/require-device-access.js",
+    "./viewer/scoped-dicomweb": "./dist/viewer/scoped-dicomweb.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "pnpm run build && node --experimental-strip-types --test tests/*.test.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.1",
+    "typescript": "6.0.3"
+  },
+  "dependencies": {
+    "@clarity/database": "workspace:*"
+  }
+}

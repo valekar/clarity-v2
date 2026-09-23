@@ -5,7 +5,7 @@ title: Separate installed V2 with automatic Orthanc intake
 universe: live
 status: verified
 updated: 2026-09-23
-revision: user-request-2026-09-23
+revision: hanko-confirmation-2026-09-23
 ---
 
 # Separate installed V2 with automatic Orthanc intake
@@ -34,10 +34,11 @@ These are design proposals with P0 proof gates, not completed integrations.
 
 ## Open inputs
 
-The brief also says Auth0. Default interpretation is Hanko for identity and Orthanc
-for scan payloads, with no Auth0 dependency. Clarification was requested; no answer
-was available when this plan was prepared. OS details, packaging, source version,
-capacity, retention and recipient verification remain in the plan's open inputs.
+The user clarified on 23 September 2026 that Hanko alone owns V2 staff identity;
+the earlier Auth0 wording no longer creates a provider choice. The user specified
+synthetic-only integration proofs for now. OS details, real cloud/source inputs,
+packaging, capacity, retention and recipient verification remain in the plan's
+open inputs.
 
 ## Impact and source
 

@@ -1,7 +1,14 @@
 # Hanko research and integration recommendation
 
-Research date: 2026-09-23. This is a proposed integration, not a running Hanko
-deployment or a claim that packaged-desktop authentication has been tested.
+Research date: 2026-09-23. This is a proposed integration. A disposable
+[cloud stack proof](../evidence/07-cloud-stack.md) has run Hanko migrations,
+readiness and effective configuration, but packaged-desktop authentication
+has not been tested.
+An independent [synthetic protocol proof](../evidence/09-hanko-protocol.md)
+has exercised Hanko v3 registration, passcode login, validation and logout
+through Mailpit. A later [Chromium proof](../evidence/16-staff-web-hanko.md)
+verified local cross-port browser cookie storage and protected-route use.
+Packaged Electron and production HTTPS domain behaviour remain untested.
 The [plan](../01-final-clarity-v2-plan.md) owns implementation choices and gates.
 
 ## Findings supported by primary sources
@@ -11,7 +18,7 @@ The [plan](../01-final-clarity-v2-plan.md) owns implementation choices and gates
 | Hanko provides a self-hostable authentication backend, Elements web components and a TypeScript/JavaScript SDK; email/username, passwords, passcodes and passkeys are documented | [Repository overview](https://github.com/teamhanko/hanko) | Use full Hanko authentication, not the separate Passkey API product |
 | Elements/SDK are MIT; the backend is AGPL-3.0 and commercial licensing is offered | [Licenses](https://github.com/teamhanko/hanko#licenses) | Record pinned-component licenses; review distribution/network-use obligations before release; do not claim the entire stack is MIT |
 | The official Next.js guide mounts client-side Elements and connects it to a configured Hanko backend URL | [Next.js guide](https://docs.hanko.io/quickstarts/fullstack/next) | Reuse the integration pattern with current App Router/proxy conventions; every server operation still checks authorization |
-| Hanko maintains server-side sessions and includes a session identifier; SDK login uses X-Auth-Token to create a client-side cookie | [Session guide](https://docs.hanko.io/guides/session-management) | A valid JWT signature alone does not prove the session remains active; SDK cookies are not automatically HttpOnly |
+| Hanko maintains server-side sessions and includes a session identifier; the older SDK session guide describes an X-Auth-Token flow, while the [v3.0.4 backend config](https://raw.githubusercontent.com/teamhanko/hanko/backend/v3.0.4/backend/config/config.yaml) defaults to an HttpOnly, Secure, SameSite=Strict cookie with `enable_auth_token_header: false` | [Session guide](https://docs.hanko.io/guides/session-management), [versioned config](https://raw.githubusercontent.com/teamhanko/hanko/backend/v3.0.4/backend/config/config.yaml) | Pin and test one actual browser/Electron cookie topology; do not assume older JavaScript-readable token behaviour or JWT-only revocation semantics |
 | GET sessions/validate is passive; POST sessions/validate updates session activity | [GET validation](https://docs.hanko.io/api-reference/public/session-management/validate-a-session), [POST validation](https://docs.hanko.io/api-reference/public/session-management/validate-a-session-1) | Background polling must not indefinitely extend human-session idle time |
 | Validation returns claims.subject, claims.session_id, expiration, issuer/audience and verified-email information; old user_id/expiration_time fields are deprecated | [Validation response](https://docs.hanko.io/api-reference/public/session-management/validate-a-session) | Normalize a versioned DTO at the server; do not confuse this response shape with raw JWT claim names |
 | Public JWKS are available and the API describes RS256 signing | [JWKS API](https://docs.hanko.io/api-reference/public/well-known/get-json-web-key-set) | Configure trusted issuer/key origin/algorithm and rotation tests; never discover a JWKS URL from an untrusted token |
@@ -50,11 +57,15 @@ the next protected action from current database facts. Revocation and logout tes
 must include already-open Electron and browser windows. Returning to a sensitive
 screen after OS unlock should require the configured session check.
 
-Hanko Elements normally reads the token in JavaScript. Do not advertise its SDK
-cookie as HttpOnly. Define Secure/SameSite/domain behaviour against the actual
-approved dashboard/auth origins, keep CSP strict and tokens out of URLs/logs.
-Introducing a server-owned HttpOnly session bridge is a separate deliberate change
-with tests, not an undocumented assumption in an adapter.
+The versioned v3.0.4 backend defaults to an HttpOnly, Secure, SameSite=Strict
+session cookie and disables the auth-token response header. The older session
+guide describes JavaScript-accessible SDK token handling. The local Chromium
+proof used Hanko's actual v3 cookie and root-level CORS configuration; it
+worked on `localhost`, while the Secure cookie was not stored for the proof's
+`127.0.0.1` IP host. P0.2 must still reconcile the actual Elements/SDK release,
+hosted domains and Electron cookie persistence with CSRF protection. Do not
+assume a server-owned bridge or force the older header flow without an explicit
+tested decision. Keep CSP strict and tokens out of URLs/logs.
 
 ## Desktop compatibility
 
@@ -83,9 +94,9 @@ keychain being unlocked, or an active Electron process.
 
 ## Hanko, Auth0 and Orthanc are different inputs
 
-The user explicitly selected Hanko but also mentioned Auth0 twice in the V2 brief.
-This plan provisionally reads those as authentication/Orthanc wording carry-over.
-No Auth0 SDK or dual-provider integration is planned until clarified. Hanko can
+The user explicitly selected Hanko and confirmed on 23 September 2026 that it is
+the sole V2 staff identity provider, resolving the earlier Auth0 wording. No Auth0
+SDK or dual-provider integration is planned. Hanko can
 also federate with Auth0 through SAML, but that is a distinct enterprise feature,
 not a reason to add it to a one-centre app. [Hanko Auth0 SAML guide](https://docs.hanko.io/guides/enterprise-sso/auth0)
 
@@ -109,7 +120,9 @@ an emailed account are not substitutes for verified ownership of that number.
 
 ## Research limits and implementation checks
 
-- No Hanko server, SDK, SMTP account or provider user was provisioned in this run.
+- A disposable Hanko v3.0.4 server and Mailpit completed a synthetic
+  registration/login/logout flow. No SDK, real SMTP account, persistent
+  provider user or packaged browser login was tested.
 - Some rendered Hanko/Turbo pages failed in the web reader; official Hanko session
   and Turbo structure pages were retrieved read-only over HTTPS and inspected.
 - Upstream docs and main branches are mutable. Select exact compatible backend,

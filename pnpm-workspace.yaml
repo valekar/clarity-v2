@@ -4,6 +4,7 @@ packages:
 autoInstallPeers: false
 strictPeerDependencies: true
 allowBuilds:
+  better-sqlite3: false
   electron: true
   unrs-resolver: false
 minimumReleaseAgeExclude:

@@ -1,0 +1,147 @@
+name: clarity-v2-cloud-proof
+
+services:
+  postgres:
+    image: postgres:18.6-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${PG_BOOTSTRAP_PASSWORD:?run scripts/proof.sh to create disposable credentials}
+      POSTGRES_DB: postgres
+      PGDATA: /var/lib/postgresql/18/docker
+      CLARITY_MIGRATOR_PASSWORD: ${CLARITY_MIGRATOR_PASSWORD:?}
+      CLARITY_RUNTIME_PASSWORD: ${CLARITY_RUNTIME_PASSWORD:?}
+      CLARITY_WORKER_PASSWORD: ${CLARITY_WORKER_PASSWORD:?}
+      CLARITY_DEVICE_AUTH_PASSWORD: ${CLARITY_DEVICE_AUTH_PASSWORD:-}
+      HANKO_MIGRATOR_PASSWORD: ${HANKO_MIGRATOR_PASSWORD:?}
+      HANKO_RUNTIME_PASSWORD: ${HANKO_RUNTIME_PASSWORD:?}
+      ORTHANC_RUNTIME_PASSWORD: ${ORTHANC_RUNTIME_PASSWORD:?}
+    volumes:
+      - postgres_data:/var/lib/postgresql
+      - ./postgres/init-roles.sql:/docker-entrypoint-initdb.d/010-roles.sql:ro
+      - ./postgres/020-device-auth-role.sh:/docker-entrypoint-initdb.d/020-device-auth-role.sh:ro
+    networks: [private]
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U postgres -d postgres]
+      interval: 2s
+      timeout: 3s
+      retries: 45
+      start_period: 3s
+    restart: unless-stopped
+
+  clarity-migrate:
+    build:
+      context: ../..
+      dockerfile: deploy/cloud/Dockerfile.clarity-migrate
+    environment:
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGDATABASE: clarity_v2_app
+      PGUSER: clarity_v2_migrator
+      PGPASSWORD: ${CLARITY_MIGRATOR_PASSWORD:?}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [private]
+    restart: "no"
+
+  hanko-migrate:
+    image: ghcr.io/teamhanko/hanko:v3.0.4@sha256:a63ff255a85623723878bbc59f3797abc92ba32d0fcc580c6f1a28a66d51dc9c
+    command: [migrate, up, --config, /config/hanko-migrate.yaml]
+    volumes:
+      - ${HANKO_MIGRATE_CONFIG:?run scripts/proof.sh to generate config}:/config/hanko-migrate.yaml:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [private]
+    restart: "no"
+
+  mailpit:
+    image: axllent/mailpit:v1.27.8@sha256:6abc8e633df15eaf785cfcf38bae48e66f64beecdc03121e249d0f9ec15f0707
+    ports:
+      - 127.0.0.1:${MAILPIT_HTTP_PORT:-18025}:8025
+    networks: [private]
+    restart: unless-stopped
+
+  hanko:
+    image: ghcr.io/teamhanko/hanko:v3.0.4@sha256:a63ff255a85623723878bbc59f3797abc92ba32d0fcc580c6f1a28a66d51dc9c
+    command: [serve, public, --config, /config/hanko-runtime.yaml]
+    volumes:
+      - ${HANKO_RUNTIME_CONFIG:?run scripts/proof.sh to generate config}:/config/hanko-runtime.yaml:ro
+    ports:
+      - 127.0.0.1:${HANKO_HTTP_PORT:-18080}:8000
+    depends_on:
+      hanko-migrate:
+        condition: service_completed_successfully
+      mailpit:
+        condition: service_started
+    networks: [private]
+    healthcheck:
+      test: [CMD, /hanko, isready, --config, /config/hanko-runtime.yaml, public]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+      start_period: 5s
+    restart: unless-stopped
+
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-05-24T17-08-30Z@sha256:a616cd8f37758b0296db62cc9e6af05a074e844cc7b5c0a0e62176d73828d440
+    command: [server, /data, --address, ":9000", --console-address, ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?}
+      MINIO_REGION_NAME: us-east-1
+    volumes:
+      - minio_data:/data
+    ports:
+      - 127.0.0.1:${MINIO_API_PORT:-19000}:9000
+      - 127.0.0.1:${MINIO_CONSOLE_PORT:-19001}:9001
+    networks: [private]
+    restart: unless-stopped
+
+  minio-init:
+    image: quay.io/minio/mc:RELEASE.2025-05-21T01-59-54Z@sha256:09f93f534cde415d192bb6084dd0e0ddd1715fb602f8a922ad121fd2bf0f8b44
+    entrypoint: [/bin/sh, -ec]
+    command:
+      - |
+        mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}"
+        until mc ready local 2>/dev/null; do sleep 1; done
+        mc ready local
+        mc mb --ignore-existing local/clarity-v2-imaging
+        mc admin policy info local orthanc-imaging >/dev/null 2>&1 || mc admin policy create local orthanc-imaging /proof/orthanc-policy.json
+        mc admin user info local orthanc-runtime >/dev/null 2>&1 || mc admin user add local orthanc-runtime "$${ORTHANC_S3_PASSWORD}"
+        mc admin policy attach local orthanc-imaging --user orthanc-runtime
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?}
+      ORTHANC_S3_PASSWORD: ${ORTHANC_S3_PASSWORD:?}
+    volumes:
+      - ./minio/orthanc-policy.json:/proof/orthanc-policy.json:ro
+    depends_on:
+      minio:
+        condition: service_started
+    networks: [private]
+    restart: "no"
+
+  orthanc:
+    image: orthancteam/orthanc:26.8.2@sha256:9758c8702a89abece99fcfe6d5571d5eaae59587e8e1ce36b9aafc8d4f24457b
+    command: [/tmp/orthanc.json]
+    volumes:
+      - ${ORTHANC_CONFIG:?run scripts/proof.sh to generate config}:/etc/orthanc/00-proof.json:ro
+    ports:
+      - 127.0.0.1:${ORTHANC_HTTP_PORT:-18042}:8042
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    networks: [private]
+    restart: unless-stopped
+
+networks:
+  # The bridge permits outbound container traffic; only proof endpoints below
+  # are published, and each is bound to 127.0.0.1 for host-side checks.
+  private: {}
+
+volumes:
+  postgres_data:
+  minio_data:

@@ -1,0 +1,160 @@
+.auth-shell {
+  display: grid;
+  min-height: 100vh;
+  align-content: center;
+  justify-items: center;
+  padding: 2rem 1.25rem;
+  background: #f5f7fa;
+}
+.auth-shell > section {
+  width: min(100%, 34rem);
+  padding: 2rem;
+  border: 1px solid #e1e7ee;
+  border-radius: 0.85rem;
+  background: #fff;
+  box-shadow: 0 4px 16px rgba(25, 48, 77, 0.025);
+}
+.auth-back,
+.auth-link {
+  color: #1e5a95;
+  font-size: 0.85rem;
+  font-weight: 650;
+  text-decoration: none;
+}
+.auth-back {
+  position: absolute;
+  top: 1.4rem;
+  left: 1.5rem;
+}
+.auth-link {
+  display: inline-flex;
+  margin-top: 1rem;
+}
+.auth-panel {
+  margin-top: 1.5rem;
+}
+.auth-status,
+.auth-unavailable {
+  color: #788798;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+.staff-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.staff-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.settings-shell {
+  width: min(100%, 68rem);
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+}
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+.settings-header h1 {
+  margin-top: 0.45rem;
+  font-size: 2rem;
+}
+.auth-back-inline {
+  color: #52657a;
+  font-size: 0.8rem;
+  text-decoration: none;
+}
+.staff-access-panel {
+  padding: 1.4rem;
+}
+.access-feedback {
+  min-height: 1.4rem;
+  color: #52657a;
+  font-size: 0.75rem;
+}
+.staff-list {
+  display: grid;
+  gap: 0.6rem;
+  margin: 1rem 0;
+  padding: 0;
+  list-style: none;
+}
+.staff-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem 0;
+  border-top: 1px solid #edf0f4;
+}
+.staff-account {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+  color: #32485f;
+  font-size: 0.78rem;
+  overflow-wrap: anywhere;
+}
+.staff-account span {
+  color: #788798;
+  font-size: 0.68rem;
+}
+.staff-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.staff-actions select {
+  min-height: 2.3rem;
+  padding: 0 0.5rem;
+  border: 1px solid #e0e6ed;
+  border-radius: 0.5rem;
+  background: #fff;
+  color: #33485e;
+  font-size: 0.73rem;
+}
+.directory-pagination {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid #edf0f4;
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+
+@media (max-width: 24rem) {
+  .auth-shell > section {
+    padding: 1.2rem;
+  }
+  .staff-row,
+  .staff-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .staff-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+  .settings-shell {
+    padding: 1.25rem 0.9rem;
+  }
+  .staff-access-panel {
+    padding: 1rem;
+  }
+}

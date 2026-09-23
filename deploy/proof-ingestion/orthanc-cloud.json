@@ -1,0 +1,25 @@
+{
+  "Name": "Clarity V2 synthetic cloud Orthanc",
+  "HttpPort": 8042,
+  "DicomPort": 4242,
+  "RemoteAccessAllowed": true,
+  "AuthenticationEnabled": false,
+  "StorageDirectory": "/var/lib/orthanc/db",
+  "IndexDirectory": "/var/lib/orthanc/db",
+  "StableAge": 1,
+  "HttpServerEnabled": true,
+  "DicomServerEnabled": false,
+  "OverwriteInstances": false,
+  "LogLevel": "WARNING",
+  "Plugins": ["/usr/share/orthanc/plugins-available/libOrthancAwsS3Storage.so"],
+  "AwsS3Storage": {
+    "BucketName": "proof-cloud-orthanc",
+    "Region": "us-east-1",
+    "AccessKey": "v2proofminio",
+    "SecretKey": "v2proof-only-local-secret",
+    "Endpoint": "http://minio:9000",
+    "VirtualAddressing": false,
+    "MaxRetries": 2,
+    "RequestTimeout": 60
+  }
+}

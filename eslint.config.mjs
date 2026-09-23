@@ -11,5 +11,12 @@ export default defineConfig([
       next: { rootDir: "apps/web" },
     },
   },
-  globalIgnores(["**/.next/**", "**/dist/**", "**/node_modules/**", "**/.turbo/**"]),
+  globalIgnores([
+    "**/.next/**",
+    "**/dist/**",
+    "**/test-dist/**",
+    "**/.test-dist/**",
+    "**/node_modules/**",
+    "**/.turbo/**",
+  ]),
 ]);

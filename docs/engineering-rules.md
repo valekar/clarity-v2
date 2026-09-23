@@ -2,9 +2,11 @@
 
 ## Scope and authority
 
-- Follow root AGENTS.md and the user's latest scope. The 23 September follow-up
-  authorizes the V2 project scaffold and its verification. Clinical integration,
-  installed services, deployment and real message delivery remain later work.
+- Follow root AGENTS.md and the user's latest scope. The first 23 September
+  follow-up authorized the V2 scaffold; the later implementation request expands
+  work across the active plan. The user selected synthetic integration for now.
+  Real centre deployment, installed-service tests and external message delivery
+  require their named inputs and acceptance evidence.
 - V1 is read-only. Copy selected code only during authorized implementation after
   checking its callers, tests, source revision and license. Never move/delete V1.
 - The operator owns Git mutations. No init, commit, push, checkout, stash or reset

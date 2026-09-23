@@ -5,7 +5,7 @@ title: V2 planning workspace
 universe: live
 status: verified
 updated: 2026-09-23
-revision: plan-1.1
+revision: implementation-foundation-2026-09-23
 ---
 
 # V2 planning workspace
@@ -26,7 +26,7 @@ identified before coding. [ACTIVE](../../docs/ACTIVE.md) selects the plan.
 [reuse assessment](../../docs/research/reuse-assessment.md) owns source selection;
 [engineering rules](../../docs/engineering-rules.md) own implementation conventions.
 The [foundation shells](foundation-shells.md) cite the app and library packages
-now present. Other planned packages remain absent until they have real consumers.
+now present. Remaining planned packages are added only with real consumers.
 
 ## Connected to
 
@@ -48,5 +48,5 @@ No known external automation points into this newly created workspace.
 
 ## See
 
-[Plan v1.1](../../docs/01-final-clarity-v2-plan.md) and
+[Plan v1.2](../../docs/01-final-clarity-v2-plan.md) and
 [dated session evidence](../sessions/2026-09-23-v2-planning.md).

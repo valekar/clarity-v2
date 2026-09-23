@@ -1,9 +1,14 @@
 .git
 node_modules
 .next
+**/.next
 .turbo
+**/.turbo
 dist
+**/dist
+**/.test-dist
 *.tsbuildinfo
+**/*.tsbuildinfo
 out
 coverage
 .local

@@ -1,0 +1,13 @@
+{
+  "Name": "Clarity V2 worker integration proof",
+  "HttpPort": 8042,
+  "DicomServerEnabled": false,
+  "HttpServerEnabled": true,
+  "RemoteAccessAllowed": true,
+  "AuthenticationEnabled": true,
+  "RegisteredUsers": {"proof": "WORKER_PROOF_PASSWORD"},
+  "StorageDirectory": "/var/lib/orthanc/db",
+  "IndexDirectory": "/var/lib/orthanc/db",
+  "OverwriteInstances": false,
+  "LogLevel": "WARNING"
+}

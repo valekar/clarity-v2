@@ -1,0 +1,102 @@
+# Synthetic application overlay for compose.yaml. Localhost ports and MinIO are
+# proof dependencies; production domains, HTTPS and object storage remain open.
+services:
+  intake-init:
+    image: quay.io/minio/mc:RELEASE.2025-05-21T01-59-54Z@sha256:09f93f534cde415d192bb6084dd0e0ddd1715fb602f8a922ad121fd2bf0f8b44
+    entrypoint: [/bin/sh, -ec]
+    command:
+      - |
+        mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}"
+        mc ready local
+        mc mb --ignore-existing local/clarity-v2-intake
+        mc admin policy info local clarity-intake-upload >/dev/null 2>&1 || mc admin policy create local clarity-intake-upload /proof/intake-upload-policy.json
+        mc admin policy info local clarity-intake-worker >/dev/null 2>&1 || mc admin policy create local clarity-intake-worker /proof/intake-worker-policy.json
+        mc admin user info local clarity-intake-upload >/dev/null 2>&1 || mc admin user add local clarity-intake-upload "$${INTAKE_UPLOAD_PASSWORD}"
+        mc admin user info local clarity-intake-worker >/dev/null 2>&1 || mc admin user add local clarity-intake-worker "$${INTAKE_WORKER_PASSWORD}"
+        mc admin policy attach local clarity-intake-upload --user clarity-intake-upload
+        mc admin policy attach local clarity-intake-worker --user clarity-intake-worker
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?}
+      INTAKE_UPLOAD_PASSWORD: ${INTAKE_UPLOAD_PASSWORD:?}
+      INTAKE_WORKER_PASSWORD: ${INTAKE_WORKER_PASSWORD:?}
+    volumes:
+      - ./minio/intake-upload-policy.json:/proof/intake-upload-policy.json:ro
+      - ./minio/intake-worker-policy.json:/proof/intake-worker-policy.json:ro
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+    networks: [private]
+    restart: "no"
+
+  web:
+    build:
+      context: ../..
+      dockerfile: deploy/cloud/Dockerfile.web
+      args:
+        NEXT_PUBLIC_HANKO_API_URL: ${HANKO_PUBLIC_API_URL:?}
+    environment:
+      DATABASE_URL: postgresql://clarity_v2_runtime:${CLARITY_RUNTIME_PASSWORD:?}@postgres:5432/clarity_v2_app
+      CLARITY_DEVICE_AUTH_DATABASE_URL: postgresql://clarity_v2_device_auth_login:${CLARITY_DEVICE_AUTH_PASSWORD:?}@postgres:5432/clarity_v2_app
+      HANKO_API_ORIGIN: http://hanko:8000
+      HANKO_ISSUER: ${HANKO_ISSUER:?}
+      HANKO_AUDIENCE: ${HANKO_AUDIENCE:?}
+      NEXT_PUBLIC_HANKO_API_URL: ${HANKO_PUBLIC_API_URL:?}
+      CLARITY_PUBLIC_ORIGIN: ${CLARITY_PUBLIC_ORIGIN:?}
+      CLOUD_ORTHANC_URL: http://orthanc:8042/
+      CLOUD_ORTHANC_DICOMWEB_URL: http://orthanc:8042/dicom-web/
+      CLOUD_ORTHANC_USERNAME: ${ORTHANC_HTTP_USERNAME:?}
+      CLOUD_ORTHANC_PASSWORD: ${ORTHANC_HTTP_PASSWORD:?}
+      INTAKE_S3_ENDPOINT: http://minio:9000
+      INTAKE_S3_PUBLIC_ENDPOINT: ${INTAKE_S3_PUBLIC_ENDPOINT:?}
+      INTAKE_S3_BUCKET: clarity-v2-intake
+      INTAKE_S3_REGION: us-east-1
+      INTAKE_S3_ACCESS_KEY: clarity-intake-upload
+      INTAKE_S3_SECRET_KEY: ${INTAKE_UPLOAD_PASSWORD:?}
+    ports:
+      - 127.0.0.1:${WEB_HTTP_PORT:-13000}:3000
+    depends_on:
+      clarity-migrate:
+        condition: service_completed_successfully
+      hanko:
+        condition: service_healthy
+      intake-init:
+        condition: service_completed_successfully
+    networks: [private]
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/api/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: deploy/cloud/Dockerfile.worker
+    environment:
+      DATABASE_URL: postgresql://clarity_v2_worker:${CLARITY_WORKER_PASSWORD:?}@postgres:5432/clarity_v2_app
+      WORKER_STAGING_DIR: /app/staging
+      INTAKE_S3_ENDPOINT: http://minio:9000
+      INTAKE_S3_BUCKET: clarity-v2-intake
+      INTAKE_S3_REGION: us-east-1
+      INTAKE_S3_ACCESS_KEY: clarity-intake-worker
+      INTAKE_S3_SECRET_KEY: ${INTAKE_WORKER_PASSWORD:?}
+      CLOUD_ORTHANC_URL: http://orthanc:8042/
+      CLOUD_ORTHANC_USERNAME: ${ORTHANC_HTTP_USERNAME:?}
+      CLOUD_ORTHANC_PASSWORD: ${ORTHANC_HTTP_PASSWORD:?}
+    volumes:
+      - worker_staging:/app/staging
+    depends_on:
+      clarity-migrate:
+        condition: service_completed_successfully
+      intake-init:
+        condition: service_completed_successfully
+      orthanc:
+        condition: service_started
+    networks: [private]
+    restart: unless-stopped
+
+volumes:
+  worker_staging:

@@ -1,0 +1,14 @@
+{
+  "Name": "Clarity V2 synthetic source",
+  "HttpPort": 8042,
+  "DicomPort": 4242,
+  "RemoteAccessAllowed": true,
+  "AuthenticationEnabled": false,
+  "StorageDirectory": "/var/lib/orthanc/db",
+  "IndexDirectory": "/var/lib/orthanc/db",
+  "StableAge": 1,
+  "HttpServerEnabled": true,
+  "DicomServerEnabled": false,
+  "OverwriteInstances": false,
+  "LogLevel": "WARNING"
+}

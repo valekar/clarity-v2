@@ -1,9 +1,11 @@
 import { existsSync, statSync } from "node:fs";
 import { dirname, extname, join, relative, resolve, sep } from "node:path";
 import { createMapOutputs, listFiles, projectRoot, readMapCards, readText } from "./map-files.ts";
+import { validateMermaidDiagram } from "./mermaid-parser.ts";
 
 const failures: string[] = [];
 let checkedLinks = 0;
+let checkedDiagrams = 0;
 const files = listFiles(projectRoot);
 const markdownFiles = files.filter((path) => path.endsWith(".md"));
 
@@ -62,10 +64,15 @@ for (const path of markdownFiles) {
     }
   }
   for (const match of text.matchAll(/```mermaid\n([\s\S]*?)\n```/g)) {
-    assertCondition(
-      /^\s*(flowchart|sequenceDiagram|erDiagram)\b/.test(match[1] ?? ""),
-      `${label}: unsupported/empty diagram declaration`,
-    );
+    const source = match[1] ?? "";
+    checkedDiagrams += 1;
+    const line = text.slice(0, match.index).split("\n").length;
+    try {
+      await validateMermaidDiagram(source);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      failures.push(`${label}:${line}: invalid Mermaid syntax: ${message}`);
+    }
   }
 }
 
@@ -157,6 +164,6 @@ if (failures.length > 0) {
   );
   process.stdout.write("Map outputs are current; source line limits pass.\n");
   process.stdout.write(
-    "Diagrams received structural checks only; no browser rendering or application tests.\n",
+    `Parsed ${checkedDiagrams} Mermaid diagrams with mermaid@12.0.0; diagrams were not rendered.\n`,
   );
 }

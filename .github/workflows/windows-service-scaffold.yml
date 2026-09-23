@@ -1,0 +1,35 @@
+name: Windows service scaffold
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-inert-package:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.3.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.20.0
+          cache: pnpm
+      - name: Verify inert service configuration and pinned wrapper
+        shell: pwsh
+        run: |
+          $lock = Get-Content deploy/windows/WinSW.lock.json | ConvertFrom-Json
+          Invoke-WebRequest -Uri $lock.url -OutFile "$env:RUNNER_TEMP/WinSW-x64.exe"
+          $actual = (Get-FileHash "$env:RUNNER_TEMP/WinSW-x64.exe" -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $lock.sha256) { throw "WinSW checksum mismatch" }
+          $env:WINSW_LOCAL_ARTIFACT = "$env:RUNNER_TEMP/WinSW-x64.exe"
+          python -m unittest discover -s deploy/windows -p "test_*.py" -v
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @clarity/sync-service build

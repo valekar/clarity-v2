@@ -4,14 +4,19 @@
 
 | Card | Type | Universe | Status | Updated |
 | --- | --- | --- | --- | --- |
+| [Recipient delivery and verification boundary](objects/delivery-boundary.md) | object | ghost | stub | 2026-09-23 |
 | [Buildable application shells and workspace packages](objects/foundation-shells.md) | object | live | verified | 2026-09-23 |
 | [V2 planning workspace](objects/planning-workspace.md) | object | live | verified | 2026-09-23 |
 | [Report and verified imaging package](objects/report-package.md) | object | ghost | stub | 2026-09-23 |
 | [Private source and synchronization service](objects/source-and-service.md) | object | ghost | stub | 2026-09-23 |
-| [Hanko identity and staff access](objects/staff-identity.md) | object | ghost | stub | 2026-09-23 |
+| [Hanko identity and staff access](objects/staff-identity.md) | object | live | verified | 2026-09-23 |
 | [Record a conversation or change](processes/session-maintenance.md) | process | live | verified | 2026-09-23 |
 | [Separate installed V2 with automatic Orthanc intake](decisions/2026-09-23-v2-direction.md) | decision | live | verified | 2026-09-23 |
+| [Prove connected synthetic ingestion and extract imaging identity reader](sessions/2026-09-23-connected-ingestion.md) | session | live | verified | 2026-09-23 |
 | [Review V2 plan for implementation readiness](sessions/2026-09-23-plan-readiness-review.md) | session | live | verified | 2026-09-23 |
+| [Review connected ingestion recovery and browser viewer limits](sessions/2026-09-23-recovery-review.md) | session | live | verified | 2026-09-23 |
 | [Review ScanLink audit and V2 discussion](sessions/2026-09-23-scanlink-conversation-review.md) | session | live | verified | 2026-09-23 |
+| [Prove synthetic upload admission and doctor directory](sessions/2026-09-23-storage-and-doctors.md) | session | live | verified | 2026-09-23 |
+| [Start phased V2 implementation with synthetic proofs](sessions/2026-09-23-v2-implementation-start.md) | session | live | verified | 2026-09-23 |
 | [V2 planning workspace and source research](sessions/2026-09-23-v2-planning.md) | session | live | verified | 2026-09-23 |
 | [Build the separate V2 monorepo scaffold](sessions/2026-09-23-v2-scaffold.md) | session | live | verified | 2026-09-23 |

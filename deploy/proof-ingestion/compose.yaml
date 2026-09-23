@@ -1,0 +1,79 @@
+name: clarity-v2-p0-4
+
+services:
+  minio:
+    image: quay.io/minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+    pull_policy: never
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: v2proofminio
+      MINIO_ROOT_PASSWORD: v2proof-only-local-secret
+      MINIO_REGION: us-east-1
+    volumes:
+      - minio-data:/data
+    networks: [proof]
+
+  minio-init:
+    image: quay.io/minio/mc@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
+    pull_policy: never
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        until mc alias set local http://minio:9000 v2proofminio v2proof-only-local-secret;
+        do sleep 1; done;
+        mc mb --ignore-existing local/proof-intake;
+        mc mb --ignore-existing local/proof-cloud-orthanc
+    depends_on:
+      - minio
+    networks: [proof]
+
+  source:
+    image: orthancteam/orthanc@sha256:9758c8702a89abece99fcfe6d5571d5eaae59587e8e1ce36b9aafc8d4f24457b
+    pull_policy: never
+    command: ["/etc/orthanc/orthanc.json"]
+    volumes:
+      - ./orthanc-source.json:/etc/orthanc/orthanc.json:ro
+      - source-db:/var/lib/orthanc/db
+    networks: [proof]
+
+  cloud:
+    image: orthancteam/orthanc@sha256:9758c8702a89abece99fcfe6d5571d5eaae59587e8e1ce36b9aafc8d4f24457b
+    pull_policy: never
+    command: ["/etc/orthanc/orthanc.json"]
+    volumes:
+      - ./orthanc-cloud.json:/etc/orthanc/orthanc.json:ro
+      - cloud-index:/var/lib/orthanc/db
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+    networks: [proof]
+
+  proof:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: clarity-v2-p0-4-proof:local
+    pull_policy: never
+    entrypoint: ["python", "/proof/proof.py"]
+    volumes:
+      - ./.runtime:/proof/runtime
+      - ./proof.py:/proof/proof.py:ro
+      - ./benchmark.py:/proof/benchmark.py:ro
+    depends_on:
+      - source
+      - cloud
+      - minio-init
+    networks: [proof]
+
+networks:
+  proof:
+    name: clarity-v2-p0-4-network
+    internal: true
+
+volumes:
+  minio-data:
+    name: clarity-v2-p0-4-minio-data
+  source-db:
+    name: clarity-v2-p0-4-source-db
+  cloud-index:
+    name: clarity-v2-p0-4-cloud-index

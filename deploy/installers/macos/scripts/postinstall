@@ -1,0 +1,14 @@
+#!/bin/sh
+set -eu
+
+volume=${3:-/}
+case "$volume" in
+  /) ;;
+  *) /usr/bin/printf '%s\n' 'Install only to the system volume.' >&2; exit 1 ;;
+esac
+/bin/mkdir -p "/var/db/clarity-v2/sync-service" "/var/log/clarity-v2/sync-service"
+/usr/sbin/chown _clarity-sync:_clarity-sync "/var/db/clarity-v2/sync-service" "/var/log/clarity-v2/sync-service"
+/bin/chmod 0700 "/var/db/clarity-v2/sync-service" "/var/log/clarity-v2/sync-service"
+# Deliberately do not bootstrap the daemon. Pairing/configuration and the live
+# cloud-fenced service entry are separate gates; installing files is inert.
+exit 0

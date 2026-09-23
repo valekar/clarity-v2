@@ -1,0 +1,29 @@
+{
+  "name": "@clarity/messaging",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./outbox": {
+      "types": "./dist/outbox.d.ts",
+      "import": "./dist/outbox.js"
+    },
+    "./signed-callback": {
+      "types": "./dist/signed-callback.d.ts",
+      "import": "./dist/signed-callback.js"
+    },
+    "./synthetic-provider": {
+      "types": "./dist/synthetic-provider.d.ts",
+      "import": "./dist/synthetic-provider.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "pnpm run build && node --experimental-strip-types --test tests/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.1",
+    "typescript": "6.0.3"
+  }
+}

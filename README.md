@@ -4,10 +4,13 @@ Foundation workspace for an installable Clarity desktop application, automatic
 local Orthanc ingestion and a dedicated cloud backend. The first deployment is
 planned for one diagnostic centre and its named staff.
 
-**Current state: monorepo scaffold.** The hosted Next.js page and Electron window
-are static setup shells. The compiled sync-service and worker entry points explicitly
-exit without doing clinical work. Hanko, Orthanc polling, storage, PostgreSQL,
-messaging, OS service registration and installers are later implementation phases.
+**Current state: monorepo scaffold plus synthetic UI/domain rules.** The hosted
+Next.js page previews Studies/Doctors/Settings and sharing with Send disabled;
+the Electron window remains a setup shell. Pure manifest/readiness decisions are
+compiled but are not connected to a source or database. The sync-service and
+worker entries explicitly exit without doing clinical work. Hanko, Orthanc
+polling, storage, PostgreSQL, messaging, OS service registration and installers
+remain later implementation phases.
 
 Start with [the V2 implementation plan](docs/01-final-clarity-v2-plan.md).
 The plan owns scope, architecture, proposed schema and acceptance. Supporting
@@ -42,7 +45,8 @@ node --experimental-strip-types scripts/check-docs.ts
 ```
 
 The [apps](apps/CONTEXT.md) own web, desktop, sync-service and worker boundaries.
-The [libs](libs/CONTEXT.md) currently hold shared UI and TypeScript settings.
+The [libs](libs/CONTEXT.md) hold shared UI, contracts, domain decisions,
+database/server/storage adapters, synthetic messaging and TypeScript settings.
 `pnpm build` compiles package code; it does not package a desktop installer or
 start a working synchronization service. Docker, Hanko and clinical integrations
 remain defined in the plan and have no runnable deployment commands yet.

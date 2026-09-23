@@ -11,13 +11,14 @@ The [root agent entry](../AGENTS.md) remains the engineering authority.
 | How will private Orthanc reach cloud storage? | [Source and synchronization](objects/source-and-service.md) |
 | How will Hanko and staff permissions work? | [Staff identity](objects/staff-identity.md) |
 | What makes a Report ready or shareable? | [Report package](objects/report-package.md) |
+| How will recipient delivery and verification work? | [Delivery boundary](objects/delivery-boundary.md) |
 | What else changes when I edit a boundary? | [Change impact](effects/CONTEXT.md) |
 | What was approved or left open? | [V2 direction](decisions/2026-09-23-v2-direction.md) |
 | How do I record this conversation/change? | [Session maintenance](processes/session-maintenance.md) |
 
 **Vocabulary:** Report is the product record; DICOM study is the source protocol
-object. Orthanc supplies scans; Hanko identifies staff; Auth0 remains an unresolved
-wording question. Desktop window and background system service have different
+object. Orthanc supplies scans; Hanko identifies staff. Desktop window and
+background system service have different
 lifecycles. `live` means in force, `leftover` means superseded but present, and
 `ghost` means named/planned but not wired. Foundation shells are live; clinical
 runtime cards remain ghost.

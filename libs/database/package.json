@@ -1,0 +1,43 @@
+{
+  "name": "@clarity/database",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./doctor-repository": {
+      "types": "./dist/doctor-repository.d.ts",
+      "import": "./dist/doctor-repository.js"
+    },
+    "./device-repository": {
+      "types": "./dist/device-repository.d.ts",
+      "import": "./dist/device-repository.js"
+    },
+    "./ingestion-repository": {
+      "types": "./dist/ingestion-repository.d.ts",
+      "import": "./dist/ingestion-repository.js"
+    },
+    "./staff-repository": {
+      "types": "./dist/staff-repository.d.ts",
+      "import": "./dist/staff-repository.js"
+    },
+    "./study-repository": {
+      "types": "./dist/study-repository.d.ts",
+      "import": "./dist/study-repository.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "migrate": "node --experimental-strip-types src/migrate.ts",
+    "proof": "bash ../../deploy/proof-database/run-proof.sh"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.1",
+    "@types/pg": "8.23.1",
+    "typescript": "6.0.3"
+  },
+  "dependencies": {
+    "@clarity/domain": "workspace:*",
+    "pg": "8.23.0"
+  }
+}

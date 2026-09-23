@@ -1,0 +1,22 @@
+<service>
+  <id>ClarityV2Sync</id>
+  <name>Clarity V2 Sync</name>
+  <description>Clarity V2 private Orthanc synchronization service</description>
+  <workingdirectory>%BASE%</workingdirectory>
+  <startmode>Manual</startmode>
+  <serviceaccount>
+    <domain>NT AUTHORITY</domain>
+    <user>LocalService</user>
+    <allowservicelogon>true</allowservicelogon>
+  </serviceaccount>
+  <executable>%BASE%\runtime\node.exe</executable>
+  <arguments>--enable-source-maps "%BASE%\app\dist\main.js" --config "%ProgramData%\ClarityV2\config\sync-service.json"</arguments>
+  <stoptimeout>30 sec</stoptimeout>
+  <hidewindow>true</hidewindow>
+  <logpath>%ProgramData%\ClarityV2\logs</logpath>
+  <log mode="roll" />
+  <onfailure action="restart" delay="30 sec" />
+  <onfailure action="restart" delay="120 sec" />
+  <onfailure action="none" />
+  <resetfailure>1 hour</resetfailure>
+</service>
