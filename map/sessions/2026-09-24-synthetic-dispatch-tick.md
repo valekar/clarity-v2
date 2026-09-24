@@ -15,7 +15,10 @@ revision: synthetic-dispatch-tick-callback-proof-2026-09-24
 Implement the policy-independent P6.3 messaging machinery while preserving the
 current SQL gate. Added an injected single-flight worker tick with a configurable
 maximum of 100 total operations, uncertain receipt reconciliation, and injected
-claim-token generation. Added a callback handler that verifies bounded HMAC
+claim-token generation. Reconciliation cannot starve queued work: one-item ticks
+alternate between reconciliation and claims, and larger budgets reserve a claim
+slot. Failed provider lookups preserve uncertainty while allowing the tick to
+claim other work. Added a callback handler that verifies bounded HMAC
 input and passes a payload digest to the repository for transactional event
 deduplication. No scheduler, database adapter wiring, HTTP route or provider
 runtime was added. See [evidence 36](../../docs/evidence/36-synthetic-dispatch-tick-and-callback.md)
@@ -26,9 +29,10 @@ link grant, real provider, delivery-role grants or message delivery were added.
 
 ## Verification
 
-- `pnpm --filter @clarity/messaging test`: passed 11/11 Node tests, including
+- `pnpm --filter @clarity/messaging test`: passed 13/13 Node tests, including
   lost acceptance and recreated worker reconciliation, bounded/single-flight
-  ticks, and callback signature-before-persistence plus event replay.
+  ticks, permanent-uncertainty fairness, and callback signature-before-persistence
+  plus event replay.
 - `pnpm --filter @clarity/messaging typecheck`: passed.
 - The worker tests use a synthetic provider and in-memory store model. They do
   not verify real PostgreSQL delivery grants or provider behavior.

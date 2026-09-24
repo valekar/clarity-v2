@@ -15,17 +15,22 @@ revision: p3-2-post-import-crash-proof-2026-09-24
 The existing separate-source proof SIGKILLs the compiled entry after a durable
 SQLite spool and checks its crash-time cloud admission boundary. This change
 adds a second boundary after a completed cloud upload, the local `received`
-checkpoint, and exact Orthanc byte readback. It kills and restarts the same
-compiled entry with the same database and spool paths, requiring the single
-completed upload and Orthanc instance to remain unchanged. Source changes are in
+checkpoint, and exact Orthanc byte readback. After confirming SIGKILL, the
+harness captures the local source checkpoint timestamp and requires it to
+advance after restart before it accepts cloud Ready, so an already-Ready cloud
+row cannot stand in for restart progress. It then requires the single completed
+upload and Orthanc instance to remain unchanged. Source changes are in
 [`prove-compiled-sync-service.mjs`](../../deploy/cloud/scripts/prove-compiled-sync-service.mjs);
 acceptance and the unverified connected run are recorded in
 [`33-compiled-sync-crash-recovery.md`](../../docs/evidence/33-compiled-sync-crash-recovery.md).
 
 ## Verification
 
-The post-import branch is harness coverage only until a connected run exercises
-it. Docker BuildKit and overlay I/O errors block the disposable Compose proof.
+The post-import and fresh source-poll assertions are harness coverage only until
+a connected run exercises them. The checkpoint baseline is sampled after the
+prior process has exited from SIGKILL. The source checkpoint timestamp is
+persisted by the change-feed page capture path. Docker BuildKit and overlay I/O
+errors block the disposable Compose proof.
 No connected crash/import behavior is claimed as verified by this update. The
 pre-existing local compiled-process results are recorded in the evidence card;
 local checks for this update are recorded with the agent session result.

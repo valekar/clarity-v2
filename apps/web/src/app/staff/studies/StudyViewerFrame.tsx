@@ -28,7 +28,6 @@ export function StudyViewerFrame({ src }: { src: string }) {
   const [state, setState] = useState<ViewerState>("opening");
 
   useEffect(() => {
-    setState("opening");
     const startedAt = Date.now();
     const timer = window.setInterval(() => {
       if (frameRef.current && hasViewerCanvas(frameRef.current)) {
@@ -55,7 +54,10 @@ export function StudyViewerFrame({ src }: { src: string }) {
         <button
           className={styles.retryViewer}
           type="button"
-          onClick={() => setAttempt((value) => value + 1)}
+          onClick={() => {
+            setState("opening");
+            setAttempt((value) => value + 1);
+          }}
         >
           Retry viewer
         </button>

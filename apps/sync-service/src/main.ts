@@ -119,6 +119,7 @@ async function main(): Promise<void> {
     if (databaseEntry?.isSymbolicLink())
       throw new Error("state database cannot be a symbolic link");
     store = new CheckpointStore(runtime.databasePath);
+    store.clearQueueLeaseAfterExclusiveServiceLock(runtime.sourceKey);
     await chmod(runtime.databasePath, 0o600);
     const feed = new OrthancChangeFeedAdapter(store, {
       baseUrl: runtime.orthancUrl,

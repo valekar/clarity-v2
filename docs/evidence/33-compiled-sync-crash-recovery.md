@@ -18,9 +18,37 @@ upload is completed, the local checkpoint is received, and Orthanc readback
 matches the exact source bytes, the harness SIGKILLs the compiled entry again.
 It verifies the completed cloud row, local receipt, and imported Orthanc
 instance survive another restart without duplicate Reports, uploads or SOPs.
+After the second SIGKILL is confirmed, the proof snapshots the local source
+checkpoint timestamp and requires it to advance before accepting the restarted
+entry's cloud Ready state. This prevents an already-Ready Report from being
+mistaken for completed restart work.
 Acceptance
 requires cloud Ready, one Report, one cloud upload, and exactly one cloud
 Orthanc SOP whose returned bytes match the generated DICOM's size and SHA-256.
+
+## Local cloud-admission response-loss recovery
+
+On 2026-09-24 the local compiled service-process proof was extended to commit a
+synthetic upload admission in its cloud fixture, hold and drop the first
+response, and SIGKILL the service before SQLite records an upload ID. The test
+reopens the same database and spool directory, then verifies the compiled
+service retries with the same stable admission key, maps it to the same single
+cloud upload ID, completes one signed PUT, and upserts the same logical Study.
+The interrupted SQLite row remains `spooled` with no upload ID before restart.
+
+This exercise exposed a local queue lease left behind by SIGKILL. Startup now
+clears only the configured source's local queue lease after acquiring the
+exclusive service lock. A competing compiled instance was started while the
+owner held that lock; it exited before state recovery, and a synthetic active
+queue lease remained held for its original owner. No spool bytes or cloud
+lease/fence state are cleared by this recovery.
+
+Verification: `pnpm --filter @clarity/sync-service build`,
+`pnpm exec tsc -p apps/sync-service/tsconfig.test.json`, and
+`node --test --test-name-pattern='compiled production service discovers' apps/sync-service/test-dist/test/compiled-service-process.test.js`
+passed; the focused compiled process proof was 1/1. This is a local synthetic
+loopback proof and does not replace the pending connected Docker crash proof or
+native installed-service restart acceptance.
 
 ## Verification
 
@@ -37,7 +65,9 @@ Previously captured local checks for the initial source-spool boundary passed:
 For the post-import harness expansion, `node --check`, Prettier check,
 `pnpm run check:source-policy`, `git diff --check`, and the local compiled
 service process test (1/1) passed. That local process test does not execute the
-connected proof script's new assertions. The expanded post-import assertions
+connected proof script's new assertions. The fresh source-poll assertion also
+remains connected harness coverage only. These static checks and the local
+process test were rerun for the fresh source-poll gate and passed. The expanded post-import assertions
 have not been exercised against connected services. Docker BuildKit/overlay
 I/O errors still block disposable integration runs, so this is harness coverage
 until the opt-in connected proof completes and its result JSON is captured.

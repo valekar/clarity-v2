@@ -1,5 +1,10 @@
 import { getIngestionServices } from "../../../../server/ingestion-services";
-import { databaseErrorStatus, errorResponse, jsonResponse, readJsonObject } from "../../../../server/staff-api";
+import {
+  databaseErrorStatus,
+  errorResponse,
+  jsonResponse,
+  readJsonObject,
+} from "../../../../server/staff-api";
 
 export const dynamic = "force-dynamic";
 
@@ -19,25 +24,46 @@ export async function POST(request: Request): Promise<Response> {
     const body = await readJsonObject(request, 4096);
     if (!body) return errorResponse(400, "invalid_request");
     const keys = [
-      "sourceGeneration", "fencingToken", "sourceReachable", "syncState", "lastErrorCode",
-      "queuedStudies", "queuedUploads", "spoolFreeBytes", "spoolCapacityBytes", "lastSuccessfulSyncAt",
+      "sourceGeneration",
+      "fencingToken",
+      "sourceReachable",
+      "syncState",
+      "lastErrorCode",
+      "queuedStudies",
+      "queuedUploads",
+      "spoolFreeBytes",
+      "spoolCapacityBytes",
+      "lastSuccessfulSyncAt",
     ];
     if (Object.keys(body).length !== keys.length || keys.some((key) => !(key in body))) {
       return errorResponse(400, "invalid_request");
     }
     if (
-      typeof body.sourceGeneration !== "string" || !FENCE.test(body.sourceGeneration) ||
-      typeof body.fencingToken !== "string" || !FENCE.test(body.fencingToken) ||
+      typeof body.sourceGeneration !== "string" ||
+      !FENCE.test(body.sourceGeneration) ||
+      typeof body.fencingToken !== "string" ||
+      !FENCE.test(body.fencingToken) ||
       typeof body.sourceReachable !== "boolean" ||
       !["idle", "syncing", "attention"].includes(String(body.syncState)) ||
-      !(body.lastErrorCode === null || ERRORS.includes(body.lastErrorCode as (typeof ERRORS)[number])) ||
-      !isCount(body.queuedStudies) || !isCount(body.queuedUploads) ||
-      !isBytes(body.spoolFreeBytes) || !isBytes(body.spoolCapacityBytes) ||
-      (body.spoolFreeBytes !== null && body.spoolCapacityBytes !== null && body.spoolFreeBytes > body.spoolCapacityBytes) ||
-      !(body.lastSuccessfulSyncAt === null || (typeof body.lastSuccessfulSyncAt === "string" &&
-        !Number.isNaN(Date.parse(body.lastSuccessfulSyncAt)))) ||
-      ((body.syncState === "attention") !== (body.lastErrorCode !== null))
-    ) return errorResponse(400, "invalid_request");
+      !(
+        body.lastErrorCode === null ||
+        ERRORS.includes(body.lastErrorCode as (typeof ERRORS)[number])
+      ) ||
+      !isCount(body.queuedStudies) ||
+      !isCount(body.queuedUploads) ||
+      !isBytes(body.spoolFreeBytes) ||
+      !isBytes(body.spoolCapacityBytes) ||
+      (body.spoolFreeBytes !== null &&
+        body.spoolCapacityBytes !== null &&
+        body.spoolFreeBytes > body.spoolCapacityBytes) ||
+      !(
+        body.lastSuccessfulSyncAt === null ||
+        (typeof body.lastSuccessfulSyncAt === "string" &&
+          !Number.isNaN(Date.parse(body.lastSuccessfulSyncAt)))
+      ) ||
+      (body.syncState === "attention") !== (body.lastErrorCode !== null)
+    )
+      return errorResponse(400, "invalid_request");
 
     const services = getIngestionServices();
     const authorization = request.headers.get("authorization");
@@ -61,7 +87,8 @@ export async function POST(request: Request): Promise<Response> {
       queuedUploads: body.queuedUploads,
       spoolFreeBytes: body.spoolFreeBytes,
       spoolCapacityBytes: body.spoolCapacityBytes,
-      lastSuccessfulSyncAt: body.lastSuccessfulSyncAt === null ? null : new Date(body.lastSuccessfulSyncAt),
+      lastSuccessfulSyncAt:
+        body.lastSuccessfulSyncAt === null ? null : new Date(body.lastSuccessfulSyncAt),
     });
     return jsonResponse({ reportedAt: reportedAt.toISOString() }, 202);
   } catch (error) {

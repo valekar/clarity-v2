@@ -130,9 +130,10 @@ async function cloudFixture(options: CloudOptions = {}) {
     }
     if (request.method === "POST" && path === "/api/ingestion/lease") {
       state.leaseCalls += 1;
+      const takeoverReady = state.takeoverDuringPut && state.putCalls > 0;
       sendJson(response, {
-        sourceGeneration: state.takeoverDuringPut && state.leaseCalls > 1 ? 2 : 1,
-        fencingToken: state.takeoverDuringPut && state.leaseCalls > 1 ? "13" : "12",
+        sourceGeneration: takeoverReady && state.leaseCalls > 1 ? 2 : 1,
+        fencingToken: takeoverReady && state.leaseCalls > 1 ? "13" : "12",
         leaseExpiresAt: new Date(Date.now() + 4 * 60_000).toISOString(),
       });
       return;

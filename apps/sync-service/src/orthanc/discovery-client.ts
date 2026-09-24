@@ -2,6 +2,7 @@ import type { InstanceObservation, StudyObservation } from "../discovery/model.j
 import type { RevalidationTarget } from "../persistence/discovery-revalidation-store.js";
 import { readBoundedJson } from "./bounded-json.js";
 import { normalizeInstanceObservation, normalizeStudyObservation } from "../discovery/normalize.js";
+import { fetchOrthanc, OrthancUnavailableError } from "./errors.js";
 
 export interface OrthancDiscoveryOptions {
   baseUrl: string;
@@ -11,12 +12,13 @@ export interface OrthancDiscoveryOptions {
   authorization?: string;
 }
 
-export class OrthancHttpError extends Error {
+export class OrthancHttpError extends OrthancUnavailableError {
   constructor(
     readonly status: number,
     pathname: string,
   ) {
-    super(`Orthanc GET ${pathname} failed with HTTP ${status}`);
+    super();
+    this.message = `Orthanc GET ${pathname} failed with HTTP ${status}`;
     this.name = "OrthancHttpError";
   }
 }
@@ -192,7 +194,7 @@ export class OrthancDiscoveryClient {
       ? this.#baseUrl
       : new URL(`${this.#baseUrl.href}/`);
     const url = new URL(`instances/${encodeURIComponent(orthancInstanceId)}/file`, base);
-    const response = await this.#fetch(url, {
+    const response = await fetchOrthanc(this.#fetch, url, {
       method: "GET",
       headers: {
         Accept: "application/dicom",
@@ -256,7 +258,7 @@ export class OrthancDiscoveryClient {
       : new URL(`${this.#baseUrl.href}/`);
     const route = path.replace(/^\//, "");
     const url = new URL(route, base);
-    const response = await this.#fetch(url, {
+    const response = await fetchOrthanc(this.#fetch, url, {
       method: "GET",
       headers: {
         Accept: "application/json",

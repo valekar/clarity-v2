@@ -5,6 +5,7 @@ import type {
   SourceIdentity,
 } from "../persistence/checkpoint-store.js";
 import { readBoundedJson } from "./bounded-json.js";
+import { fetchOrthanc, OrthancUnavailableError } from "./errors.js";
 
 export interface OrthancChangeFeedOptions {
   baseUrl: string;
@@ -185,7 +186,7 @@ export class OrthancChangeFeedAdapter {
           path.replace(/^\//, ""),
           this.#baseUrl.href.endsWith("/") ? this.#baseUrl : `${this.#baseUrl}/`,
         ).href;
-    const response = await this.#fetch(url, {
+    const response = await fetchOrthanc(this.#fetch, url, {
       method: "GET",
       headers: {
         Accept: "application/json",
@@ -193,8 +194,10 @@ export class OrthancChangeFeedAdapter {
       },
       signal: AbortSignal.timeout(10_000),
     });
-    if (!response.ok)
-      throw new Error(`Orthanc GET ${new URL(url).pathname} failed with HTTP ${response.status}`);
+    if (!response.ok) {
+      await response.body?.cancel().catch(() => undefined);
+      throw new OrthancUnavailableError();
+    }
     const pathname = new URL(url).pathname;
     return readBoundedJson(response, pathname === "/changes" ? 2 * 1024 * 1024 : 128 * 1024);
   }

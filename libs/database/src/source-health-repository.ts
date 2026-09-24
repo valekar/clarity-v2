@@ -38,23 +38,29 @@ function uuid(value: string): string {
 function nullableNumber(value: unknown): number | null {
   if (value === null) return null;
   const number = Number(value);
-  if (!Number.isSafeInteger(number) || number < 0) throw new Error("Health query returned an invalid count.");
+  if (!Number.isSafeInteger(number) || number < 0)
+    throw new Error("Health query returned an invalid count.");
   return number;
 }
 
 function dateString(value: unknown): string | null {
   if (value === null) return null;
-  if (!(value instanceof Date) || Number.isNaN(value.getTime())) throw new Error("Health query returned an invalid timestamp.");
+  if (!(value instanceof Date) || Number.isNaN(value.getTime()))
+    throw new Error("Health query returned an invalid timestamp.");
   return value.toISOString();
 }
 
 function map(row: Row): SourceHealthItem {
   if (
-    typeof row.source_id !== "string" || typeof row.source_name !== "string" ||
+    typeof row.source_id !== "string" ||
+    typeof row.source_name !== "string" ||
     !(row.source_reachable === null || typeof row.source_reachable === "boolean") ||
-    !(row.sync_state === null || ["idle", "syncing", "attention"].includes(String(row.sync_state))) ||
+    !(
+      row.sync_state === null || ["idle", "syncing", "attention"].includes(String(row.sync_state))
+    ) ||
     !(row.last_error_code === null || typeof row.last_error_code === "string")
-  ) throw new Error("Health query returned an invalid source row.");
+  )
+    throw new Error("Health query returned an invalid source row.");
   const queuedStudies = nullableNumber(row.queued_studies) ?? 0;
   const queuedUploads = nullableNumber(row.queued_uploads) ?? 0;
   return Object.freeze({

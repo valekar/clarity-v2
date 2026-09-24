@@ -60,20 +60,23 @@ export type DeviceAuthRepository = Readonly<{
       fencingToken: string;
     }>,
   ): Promise<boolean>;
-  reportHealth(input: Readonly<{
-    sourceId: string;
-    deviceId: string;
-    sourceGeneration: string;
-    fencingToken: string;
-    sourceReachable: boolean;
-    syncState: "idle" | "syncing" | "attention";
-    lastErrorCode: "orthanc_unavailable" | "low_spool_space" | "source_changed" | "sync_failed" | null;
-    queuedStudies: number;
-    queuedUploads: number;
-    spoolFreeBytes: number | null;
-    spoolCapacityBytes: number | null;
-    lastSuccessfulSyncAt: Date | null;
-  }>): Promise<Date>;
+  reportHealth(
+    input: Readonly<{
+      sourceId: string;
+      deviceId: string;
+      sourceGeneration: string;
+      fencingToken: string;
+      sourceReachable: boolean;
+      syncState: "idle" | "syncing" | "attention";
+      lastErrorCode:
+        "orthanc_unavailable" | "low_spool_space" | "source_changed" | "sync_failed" | null;
+      queuedStudies: number;
+      queuedUploads: number;
+      spoolFreeBytes: number | null;
+      spoolCapacityBytes: number | null;
+      lastSuccessfulSyncAt: Date | null;
+    }>,
+  ): Promise<Date>;
   close(): Promise<void>;
 }>;
 

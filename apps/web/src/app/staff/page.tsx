@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getStaffServices } from "../../server/staff-services";
 import { LogoutButton } from "../sign-in/LogoutButton";
+import { SourceHealthPanel } from "./SourceHealthPanel";
 import { StaffNavigation } from "./StaffNavigation";
 import styles from "./study-dashboard.module.css";
 
@@ -99,6 +100,7 @@ export default async function StaffHomePage({ searchParams }: { searchParams: Pa
         <LogoutButton />
       </header>
       <StaffNavigation current="studies" />
+      <SourceHealthPanel />
       <section className={styles.heading} aria-labelledby="queue-title">
         <h2 id="queue-title">Study queue</h2>
         <p className={styles.muted}>

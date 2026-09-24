@@ -59,3 +59,20 @@ all members. The read and dispatch boundaries continue to require Report state
 `ready`; a dirty Report cannot satisfy the database Ready check. Historic files
 may be excluded by a fresh manifest, so readiness is scoped to exact current
 members rather than every file ever observed.
+
+Migration `0016_source_health.sql` stores one bounded operational report per
+source. The device-auth function locks the source and device, checks the current
+paired device, active lease, generation and fence, then writes server receipt
+time. The staff read function rechecks active membership and joins only a report
+matching the current live lease. The web API computes staleness from server time;
+see the [source-health session](../../map/sessions/2026-09-24-source-health.md).
+
+Migration `0017_dispatch_uncertain_listing.sql` adds an indexed reconciliation
+attempt timestamp and a bounded `list_uncertain_dispatch_outbox` function. It
+rotates uncertain rows with `FOR UPDATE SKIP LOCKED`; PUBLIC and application
+roles receive no execute grant. The dispatch repository exposes that function
+through `listUncertain` and a narrow worker adapter. A synthetic PostgreSQL 15
+proof invokes that adapter with the worker/provider/callback and exercises the
+SQL state path in one rolled-back transaction; it does not prove crash/restart
+durability, cross-worker concurrency or restricted delivery-role execution.
+See [evidence 39](../../docs/evidence/39-uncertain-dispatch-listing.md).

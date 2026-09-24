@@ -1,0 +1,144 @@
+.panel {
+  margin: 1.5rem 0;
+  padding: 1rem 1.2rem;
+  border: 1px solid #dce4eb;
+  border-radius: 0.75rem;
+  background: #f9fbfc;
+}
+
+.header,
+.sourceHeading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.header h2,
+.sourceHeading h3 {
+  margin: 0;
+  color: #1d3346;
+}
+
+.header h2 {
+  font-size: 1.1rem;
+}
+
+.header p,
+.source p,
+.unavailable p {
+  margin: 0.3rem 0 0;
+  color: #586b7c;
+  line-height: 1.45;
+}
+
+.header button,
+.unavailable button {
+  min-height: 2.4rem;
+  padding: 0.45rem 0.75rem;
+  border: 1px solid #597184;
+  border-radius: 0.4rem;
+  background: #fff;
+  color: #1d4057;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sources {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 21rem), 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.source {
+  min-width: 0;
+  padding: 0.9rem;
+  border: 1px solid #e1e7ed;
+  border-radius: 0.6rem;
+  background: #fff;
+}
+
+.sourceHeading {
+  align-items: center;
+}
+
+.sourceHeading h3 {
+  overflow-wrap: anywhere;
+  font-size: 0.95rem;
+}
+
+.badge {
+  flex: 0 0 auto;
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  background: #e8edf1;
+  color: #495d6f;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.healthy {
+  background: #e7f5ef;
+  color: #23704d;
+}
+
+.attention,
+.stale {
+  background: #fff2dc;
+  color: #80551a;
+}
+
+.offline {
+  background: #fce9e8;
+  color: #8b3028;
+}
+
+.source dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
+  gap: 0.65rem 1rem;
+  margin: 0.8rem 0 0;
+}
+
+.source dl div {
+  min-width: 0;
+}
+
+.source dt {
+  color: #66798a;
+  font-size: 0.7rem;
+  font-weight: 650;
+}
+
+.source dd {
+  margin: 0.1rem 0 0;
+  color: #263a4b;
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+
+.unavailable {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.8rem;
+}
+
+@media (max-width: 520px) {
+  .header,
+  .unavailable {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .header button,
+  .unavailable button {
+    align-self: flex-start;
+  }
+}

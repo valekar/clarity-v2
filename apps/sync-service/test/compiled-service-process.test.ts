@@ -47,9 +47,11 @@ async function stopChild(child: ChildProcess): Promise<void> {
 }
 
 test("compiled production service discovers, uploads and seals one synthetic study", async () => {
+  const sourceCalls: string[] = [];
   const source = createServer((request, response) => {
     const url = new URL(request.url ?? "/", "http://localhost");
     const path = url.pathname;
+    sourceCalls.push(`${request.method} ${path}`);
     if (path === "/system")
       return json(response, { DatabaseServerIdentifier: "synthetic-main", DatabaseVersion: 6 });
     if (path === "/changes") return json(response, { Last: 0, Done: true, Changes: [] });
@@ -83,6 +85,13 @@ test("compiled production service discovers, uploads and seals one synthetic stu
   });
   let receivedBytes = Buffer.alloc(0);
   const calls: string[] = [];
+  const studyAdmissions: string[] = [];
+  const uploadAdmissionKeys: string[] = [];
+  const uploadIdsByAdmissionKey = new Map<string, string>();
+  let releaseFirstUploadAdmission!: () => void;
+  const firstUploadAdmissionRelease = new Promise<void>((resolvePromise) => {
+    releaseFirstUploadAdmission = resolvePromise;
+  });
   let reportVersion = 1;
   let proof: { revision: number | null; digest: string | null; generation: number | null } = {
     revision: null,
@@ -103,6 +112,8 @@ test("compiled production service discovers, uploads and seals one synthetic stu
       });
     }
     if (url.pathname === "/api/ingestion/studies") {
+      const body = await requestJson(request);
+      studyAdmissions.push(body.studyInstanceUid as string);
       return json(response, {
         reportId,
         studyInstanceUid: uid,
@@ -113,11 +124,23 @@ test("compiled production service discovers, uploads and seals one synthetic stu
       });
     }
     if (url.pathname === "/api/ingestion/uploads") {
+      const admission = await requestJson(request);
+      const admissionKey = admission.admissionKey;
+      assert.equal(typeof admissionKey, "string");
+      uploadAdmissionKeys.push(admissionKey as string);
+      const admittedUploadId = uploadIdsByAdmissionKey.get(admissionKey as string) ?? uploadId;
+      uploadIdsByAdmissionKey.set(admissionKey as string, admittedUploadId);
+      if (uploadAdmissionKeys.length === 1) {
+        uploadStatus = "admitted";
+        await firstUploadAdmissionRelease;
+        response.destroy();
+        return;
+      }
       if (uploadStatus === "received" || uploadStatus === "completed") {
-        return json(response, { uploadId, status: uploadStatus });
+        return json(response, { uploadId: admittedUploadId, status: uploadStatus });
       }
       return json(response, {
-        uploadId,
+        uploadId: admittedUploadId,
         expiresAt: new Date(Date.now() + 60_000).toISOString(),
         mode: "put",
         put: {
@@ -185,18 +208,46 @@ test("compiled production service discovers, uploads and seals one synthetic stu
       stdio: ["ignore", "pipe", "pipe"],
       env: serviceEnvironment,
     });
-  const child = startService();
+  let child = startService();
   let stdout = "";
   let stderr = "";
-  child.stdout?.setEncoding("utf8").on("data", (chunk: string) => (stdout += chunk));
-  child.stderr?.setEncoding("utf8").on("data", (chunk: string) => (stderr += chunk));
+  const captureOutput = (processChild: ChildProcess): void => {
+    processChild.stdout?.setEncoding("utf8").on("data", (chunk: string) => (stdout += chunk));
+    processChild.stderr?.setEncoding("utf8").on("data", (chunk: string) => (stderr += chunk));
+  };
+  captureOutput(child);
   try {
+    const admissionDeadline = Date.now() + 12_000;
+    while (uploadAdmissionKeys.length === 0 && Date.now() < admissionDeadline) {
+      if (child.exitCode !== null) throw new Error(`compiled service exited early: ${stderr}`);
+      await new Promise((resolvePromise) => setTimeout(resolvePromise, 25));
+    }
+    assert.equal(uploadAdmissionKeys.length, 1, `no first cloud upload admission: ${stderr}`);
+    const killed = once(child, "exit");
+    child.kill("SIGKILL");
+    await killed;
+    releaseFirstUploadAdmission();
+
+    const interruptedStore = new CheckpointStore(databasePath);
+    const interruptedUpload = interruptedStore.uploads.findBySop(
+      "synthetic-main-source",
+      "2.25.9982",
+    );
+    assert.equal(interruptedUpload?.state, "spooled");
+    assert.equal(interruptedUpload?.uploadId, null);
+    interruptedStore.close();
+
+    child = startService();
+    captureOutput(child);
     const deadline = Date.now() + 12_000;
     while (sealCalls === 0 && Date.now() < deadline) {
       if (child.exitCode !== null) throw new Error(`compiled service exited early: ${stderr}`);
       await new Promise((resolvePromise) => setTimeout(resolvePromise, 50));
     }
-    assert.ok(sealCalls > 0, `no manifest seal: ${stderr}`);
+    assert.ok(
+      sealCalls > 0,
+      `no manifest seal: ${stderr}; calls=${calls.join(",")}; source=${sourceCalls.join(",")}; admissions=${uploadAdmissionKeys.length}`,
+    );
     assert.deepEqual(receivedBytes, dicom);
     assert.match(stdout, /sync service started/);
     await stopChild(child);
@@ -237,10 +288,39 @@ test("compiled production service discovers, uploads and seals one synthetic stu
         "restarted service did not reconcile cloud proof",
       );
       await new Promise((resolvePromise) => setTimeout(resolvePromise, 250));
+
+      const leaseGuard = new CheckpointStore(databasePath);
+      assert.equal(
+        leaseGuard.acquireQueueLease("synthetic-main-source", "active-local-owner"),
+        true,
+      );
+      const duplicate = startService();
+      try {
+        const duplicateExited = await Promise.race([
+          once(duplicate, "exit").then(() => true),
+          new Promise<false>((resolvePromise) => setTimeout(() => resolvePromise(false), 2_000)),
+        ]);
+        assert.equal(duplicateExited, true, "duplicate service did not stop at the singleton lock");
+        assert.equal(duplicate.exitCode, 1);
+        assert.equal(
+          leaseGuard.acquireQueueLease("synthetic-main-source", "duplicate-contender"),
+          false,
+          "a process without the singleton lock cleared the active local lease",
+        );
+      } finally {
+        await stopChild(duplicate);
+        leaseGuard.releaseQueueLease("synthetic-main-source", "active-local-owner");
+        leaseGuard.close();
+      }
     } finally {
       await stopChild(restarted);
     }
     assert.ok(calls.length > beforeRestartCalls);
+    assert.ok(uploadAdmissionKeys.length >= 2, "restarted service did not retry cloud admission");
+    assert.equal(new Set(uploadAdmissionKeys).size, 1, "restart changed the stable admission key");
+    assert.equal(uploadIdsByAdmissionKey.size, 1, "retry allocated a duplicate cloud upload");
+    assert.ok(studyAdmissions.length >= 2, "restart did not reconcile the same Report");
+    assert.equal(new Set(studyAdmissions).size, 1, "restart changed the logical Study identity");
     assert.equal(calls.filter((call) => call === "PUT /signed/object").length, 1);
     assert.equal(sealCalls, 1);
     const reconciledStore = new CheckpointStore(databasePath);

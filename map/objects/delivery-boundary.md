@@ -39,6 +39,16 @@ synthetic SQL and transition assertions are in
 injected bounded worker tick and verified callback handler now have focused
 synthetic tests in [evidence 36](../../docs/evidence/36-synthetic-dispatch-tick-and-callback.md).
 Neither is wired to a scheduler, network endpoint or database delivery role.
+Migration [0017](../../libs/database/migrations/0017_dispatch_uncertain_listing.sql)
+adds a bounded, rotating SQL listing of uncertain idempotency keys and a
+database-side adapter matching the synthetic worker contract. A local
+PostgreSQL 15 transaction drove the real repository, worker, synthetic provider
+and callback handler through lost acceptance, reconciliation and duplicate
+callback handling; see [evidence 39](../../docs/evidence/39-uncertain-dispatch-listing.md).
+The function is revoked from PUBLIC and known application roles. The proof rolls
+back all fixture state; it does not establish restart durability or concurrent
+worker behavior. The adapter has not been wired to a granted service role or
+live runtime.
 OI-06 recipient verification remains open; no share link or message can be
 released.
 

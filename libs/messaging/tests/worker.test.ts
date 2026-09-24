@@ -135,3 +135,65 @@ test("transport exceptions never become automatic resend authorization", async (
   assert.equal((await worker.tick()).uncertain, 1);
   assert.equal(store.queued.length, 0);
 });
+
+test("a permanent uncertain item cannot starve queued work with a one-item tick", async () => {
+  const store = new DurableStore();
+  store.uncertainKeys.add("permanent-uncertain-key");
+  store.queued.push(claim("outbox-behind-uncertain"));
+  const provider = new SyntheticMessageProvider();
+  const worker = createDispatchWorker({
+    store,
+    transport: provider,
+    nextClaimToken: () => "claim-token-fairness",
+    maxWorkPerTick: 1,
+    claimSeconds: 30,
+  });
+
+  const reconciliationTick = await worker.tick();
+  assert.deepEqual(reconciliationTick, {
+    claimed: 0,
+    submitted: 0,
+    uncertain: 1,
+    reconciled: 1,
+    busy: false,
+  });
+  const claimTick = await worker.tick();
+  assert.deepEqual(claimTick, {
+    claimed: 1,
+    submitted: 1,
+    uncertain: 0,
+    reconciled: 0,
+    busy: false,
+  });
+  assert.equal(store.queued.length, 0);
+  assert.equal(store.uncertainKeys.has("permanent-uncertain-key"), true);
+});
+
+test("one failed provider lookup leaves uncertainty intact and permits a fresh claim", async () => {
+  const store = new DurableStore();
+  store.uncertainKeys.add("lookup-fails");
+  store.queued.push(claim("outbox-after-lookup-failure"));
+  const provider = new SyntheticMessageProvider();
+  const worker = createDispatchWorker({
+    store,
+    transport: {
+      send: (intent) => provider.send(intent),
+      reconcile: async () => {
+        throw new Error("synthetic provider lookup outage");
+      },
+    },
+    nextClaimToken: () => "claim-token-after-lookup-failure",
+    maxWorkPerTick: 2,
+    claimSeconds: 30,
+  });
+
+  assert.deepEqual(await worker.tick(), {
+    claimed: 1,
+    submitted: 1,
+    uncertain: 1,
+    reconciled: 1,
+    busy: false,
+  });
+  assert.equal(store.uncertainKeys.has("lookup-fails"), true);
+  assert.equal(store.queued.length, 0);
+});

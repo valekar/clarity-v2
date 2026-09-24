@@ -4,17 +4,29 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { CheckpointStore } from "../src/persistence/checkpoint-store.js";
-import { SyncLoop } from "../src/runtime/sync-loop.js";
+import { classifySyncFailure, SyncLoop } from "../src/runtime/sync-loop.js";
 import type { InventoryCoordinator } from "../src/discovery/inventory-coordinator.js";
 import type { OrthancChangeFeedAdapter } from "../src/orthanc/change-feed.js";
 import type { OrthancDiscoveryClient } from "../src/orthanc/discovery-client.js";
-import { IngestionClient } from "../src/transfers/ingestion-client.js";
+import type { IngestionClient } from "../src/transfers/ingestion-client.js";
+import { OrthancUnavailableError } from "../src/orthanc/errors.js";
 
 const complete = {
   run: { generation: 0, completedAt: new Date(1_000).toISOString() },
   status: "complete" as const,
   pagesProcessed: 0,
 };
+
+test("only a known Orthanc transport failure marks the source unreachable", () => {
+  assert.deepEqual(classifySyncFailure(new OrthancUnavailableError()), {
+    sourceReachable: false,
+    lastErrorCode: "orthanc_unavailable",
+  });
+  assert.deepEqual(classifySyncFailure(new Error("local queue failure")), {
+    sourceReachable: true,
+    lastErrorCode: "sync_failed",
+  });
+});
 
 test("sync loop advances initial discovery, polls changes, and schedules periodic reconciliation", async () => {
   const directory = await mkdtemp(join(tmpdir(), "clarity-sync-loop-test-"));
@@ -45,12 +57,7 @@ test("sync loop advances initial discovery, polls changes, and schedules periodi
     },
   } as unknown as OrthancChangeFeedAdapter;
   const orthanc = {} as OrthancDiscoveryClient;
-  const cloud = new IngestionClient({
-    apiBaseUrl: "http://127.0.0.1:9999",
-    deviceAuthorization: `ClarityDevice 123e4567-e89b-12d3-a456-426614174000.${"A".repeat(43)}`,
-    allowInsecureLocalhost: true,
-    fetchImpl: async () => new Response("{}"),
-  });
+  const cloud = { reportHealth: async () => undefined } as unknown as IngestionClient;
   const loop = new SyncLoop(store, feed, coordinator, orthanc, cloud, {
     sourceKey: "synthetic-source",
     spoolDirectory: join(directory, "spool"),

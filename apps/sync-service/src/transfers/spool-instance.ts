@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { open, mkdir, rename, rm, statfs, readdir } from "node:fs/promises";
+import { open, mkdir, rename, rm, statfs, readdir, type FileHandle } from "node:fs/promises";
 import { basename, join, resolve, sep } from "node:path";
 import type { InstanceObservation } from "../discovery/model.js";
 import type { OrthancDiscoveryClient } from "../orthanc/discovery-client.js";
@@ -15,6 +15,13 @@ export interface SpoolOptions {
   maximumObjectBytes: number;
   reserveFreeBytes: number;
   freeBytes?: (directory: string) => Promise<number>;
+  writeChunk?: (
+    file: FileHandle,
+    bytes: Uint8Array,
+    offset: number,
+    length: number,
+  ) => Promise<number>;
+  renameFile?: (partialPath: string, finalPath: string) => Promise<void>;
   reopenReceived?: boolean;
   signal?: AbortSignal;
 }
@@ -137,6 +144,11 @@ export async function spoolInstance(
   }
 
   const freeBytes = options.freeBytes ?? availableBytes;
+  const writeChunk =
+    options.writeChunk ??
+    (async (target: FileHandle, bytes: Uint8Array, offset: number, length: number) =>
+      (await target.write(bytes, offset, length)).bytesWritten);
+  const renameFile = options.renameFile ?? rename;
   if ((await freeBytes(options.directory)) <= options.reserveFreeBytes) {
     throw new SpoolCapacityError("Spool volume is below its protected free-space reserve");
   }
@@ -180,9 +192,12 @@ export async function spoolInstance(
       digest.update(part.value);
       let offset = 0;
       while (offset < part.value.byteLength) {
-        const written = await file.write(part.value, offset, part.value.byteLength - offset);
-        if (written.bytesWritten === 0) throw new Error("Spool write made no progress");
-        offset += written.bytesWritten;
+        const remaining = part.value.byteLength - offset;
+        const written = await writeChunk(file, part.value, offset, remaining);
+        if (!Number.isSafeInteger(written) || written <= 0 || written > remaining) {
+          throw new Error("Spool write returned an invalid byte count");
+        }
+        offset += written;
       }
     }
     if (byteCount === 0 || (Number.isSafeInteger(declared) && declared !== byteCount)) {
@@ -190,7 +205,7 @@ export async function spoolInstance(
     }
     await file.sync();
     await file.close();
-    await rename(partialPath, finalPath);
+    await renameFile(partialPath, finalPath);
     const sha256 = digest.digest("hex");
     try {
       const spoolRecord = {
@@ -256,6 +271,7 @@ export async function spoolInstance(
       throw error;
     }
   } catch (error) {
+    await reader.cancel(error).catch(() => undefined);
     await file.close().catch(() => undefined);
     await rm(partialPath, { force: true });
     throw error;

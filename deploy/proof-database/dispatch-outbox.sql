@@ -160,6 +160,8 @@ DECLARE
   v_claim uuid := '94000000-0000-4000-8000-000000000002';
   v_message_id text := 'synthetic-provider-message-001';
   v_state text;
+  v_first_reconcile_key uuid;
+  v_second_reconcile_key uuid;
 BEGIN
   SELECT o.id, o.idempotency_key INTO v_outbox_id, v_key
     FROM public.dispatch_outbox o
@@ -186,9 +188,40 @@ BEGIN
   IF public.record_dispatch_provider_outcome(v_outbox_id, v_claim, 'unknown', NULL, 'synthetic_timeout') <> 'uncertain' THEN
     RAISE EXCEPTION 'unknown provider outcome was not marked uncertain';
   END IF;
+  UPDATE public.dispatch_outbox SET state = 'uncertain',
+    authorization_ref = '95000000-0000-4000-8000-000000000002',
+    message_text = 'Synthetic proof only; no share link or delivery.',
+    last_error_code = 'synthetic_unknown'
+   WHERE dispatch_id = '92000000-0000-4000-8000-000000000001'
+     AND id <> v_outbox_id;
   IF public.reconcile_dispatch_outbox(v_key, NULL) <> 'uncertain' THEN
     RAISE EXCEPTION 'no-match reconciliation incorrectly made delivery retryable';
   END IF;
+  SELECT item.idempotency_key INTO v_first_reconcile_key
+    FROM public.list_uncertain_dispatch_outbox(1) AS item;
+  SELECT item.idempotency_key INTO v_second_reconcile_key
+    FROM public.list_uncertain_dispatch_outbox(1) AS item;
+  IF v_first_reconcile_key IS NULL OR v_second_reconcile_key IS NULL
+     OR v_first_reconcile_key = v_second_reconcile_key THEN
+    RAISE EXCEPTION 'bounded uncertain listing did not rotate between pending rows';
+  END IF;
+  IF (SELECT item.idempotency_key FROM public.list_uncertain_dispatch_outbox(1) AS item)
+     <> v_first_reconcile_key THEN
+    RAISE EXCEPTION 'uncertain listing did not rotate back to the oldest attempt';
+  END IF;
+  IF (SELECT count(*) FROM public.dispatch_outbox
+       WHERE idempotency_key IN (v_first_reconcile_key, v_second_reconcile_key)
+         AND state = 'uncertain' AND last_reconcile_attempt_at IS NOT NULL) <> 2 THEN
+    RAISE EXCEPTION 'uncertain listing did not persist reconciliation attempt times';
+  END IF;
+  IF (SELECT count(*) FROM public.list_uncertain_dispatch_outbox(100)) <> 2 THEN
+    RAISE EXCEPTION 'uncertain listing exposed blocked-policy rows or missed uncertain rows';
+  END IF;
+  BEGIN
+    PERFORM * FROM public.list_uncertain_dispatch_outbox(101);
+    RAISE EXCEPTION 'uncertain listing accepted an over-limit page';
+  EXCEPTION WHEN invalid_parameter_value THEN NULL;
+  END;
   IF EXISTS (SELECT 1 FROM public.claim_dispatch_outbox('94000000-0000-4000-8000-000000000003', 60)) THEN
     RAISE EXCEPTION 'uncertain delivery was automatically resent';
   END IF;
@@ -224,9 +257,32 @@ BEGIN
   EXCEPTION WHEN insufficient_privilege THEN v_denied := true;
   END;
   IF NOT v_denied THEN RAISE EXCEPTION 'web runtime can create or authorize a dispatch'; END IF;
+  v_denied := false;
+  BEGIN
+    EXECUTE 'SELECT * FROM public.list_uncertain_dispatch_outbox(1)';
+  EXCEPTION WHEN insufficient_privilege THEN v_denied := true;
+  END;
+  IF NOT v_denied THEN RAISE EXCEPTION 'web runtime can list uncertain outbox rows'; END IF;
 END;
 $$;
 RESET ROLE;
+
+DO $$
+BEGIN
+  IF has_function_privilege('clarity_v2_worker', 'public.list_uncertain_dispatch_outbox(integer)', 'EXECUTE')
+     OR has_function_privilege('clarity_v2_device_auth_login', 'public.list_uncertain_dispatch_outbox(integer)', 'EXECUTE')
+     OR EXISTS (
+       SELECT 1
+         FROM pg_proc p
+         CROSS JOIN LATERAL aclexplode(COALESCE(p.proacl, acldefault('f', p.proowner))) grant_entry
+        WHERE p.oid = 'public.list_uncertain_dispatch_outbox(integer)'::regprocedure
+          AND grant_entry.grantee = 0
+          AND grant_entry.privilege_type = 'EXECUTE'
+     ) THEN
+    RAISE EXCEPTION 'uncertain listing has a PUBLIC, worker or device-auth execute grant';
+  END IF;
+END;
+$$;
 
 ROLLBACK;
 SELECT 'Synthetic dispatch/outbox transaction assertions passed; all fixture state rolled back.' AS result;

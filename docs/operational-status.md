@@ -14,6 +14,13 @@ procedure yet. Use synthetic data only.
 | Staff pilot | Not released | Real installed service, signed installers, two-OS lifecycle, source and clinical-content breadth, cloud topology and centre acceptance remain open. |
 | External sharing | Not released | OI-06 recipient verification, final Send, grants, provider/canary, expiry and phone-browser acceptance remain open. The outbox is [policy-blocked](evidence/27-policy-gated-dispatch-outbox.md). |
 
+The current source-health API and staff panel have focused tests and an isolated
+PostgreSQL 15 fence proof. The combined V2 stack, PostgreSQL 18, and browser
+behavior have not been rerun. Migration 0017 has a separate isolated
+PostgreSQL 15 uncertain-row rotation and role-denial proof. The synthetic
+dispatch worker remains an injectable test contract only; it is not scheduled
+or granted permission to deliver.
+
 ## Pinned synthetic components
 
 The workspace pins Node.js 22.20.0, pnpm 12.3.4, Electron 44.4.4, Next.js
@@ -51,13 +58,17 @@ not been selected. No production restore command is accepted yet.
   membership guard. Device sync has a separate machine identity.
 - A source outage or cloud outage must leave local checkpoints and queued
   files intact. Reconcile the durable queue after recovery; do not delete the
-  source or spool as a repair step. Installed-service recovery remains unproved.
+  source or spool as a repair step. A compiled local SIGKILL proof now clears
+  a stale source queue claim only after the singleton lock; installed-service
+  recovery remains unproved.
 - A worker crash must reconcile the intake object and Orthanc import before
   marking a Report Ready. Retain intake bytes until durable cloud references
   are recorded; the cross-system fence race is still an open acceptance gate.
-- Low disk and changed source bytes have synthetic attention states. Current
-  staff UI has no live source-capacity telemetry; use local service diagnostics
-  during proofs and do not interpret a Ready cloud copy as a healthy source.
+- Low disk and changed source bytes have synthetic attention states. The staff
+  panel reads fenced source-capacity reports and labels missing or old reports
+  stale; use local service diagnostics during proofs because the connected
+  reporting path has not been rerun. Do not interpret a Ready cloud copy as a
+  healthy source.
 - Provider acceptance with a lost response is uncertain. Reconcile by the
   stable idempotency key before any resend. Current outbox rows are blocked by
   recipient policy and cannot be delivered.

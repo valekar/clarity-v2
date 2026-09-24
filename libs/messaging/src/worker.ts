@@ -72,14 +72,28 @@ export function createDispatchWorker(
   let running = false;
   let reconcileFirstWhenSingleSlot = true;
 
-  async function reconcilePending(limit: number): Promise<{ reconciled: number; submitted: number; uncertain: number }> {
+  async function reconcilePending(
+    limit: number,
+  ): Promise<{ reconciled: number; submitted: number; uncertain: number }> {
     const pending = await input.store.listUncertain(limit);
     let reconciled = 0;
     let submitted = 0;
     let uncertain = 0;
     for (const item of pending.slice(0, limit)) {
-      const receipt = await input.transport.reconcile(item.idempotencyKey);
-      const state = await input.store.reconcile(item.idempotencyKey, receipt?.providerMessageId ?? null);
+      let receipt: ProviderReceipt | null;
+      try {
+        receipt = await input.transport.reconcile(item.idempotencyKey);
+      } catch {
+        // A failed provider lookup cannot authorize a resend. Leave the row
+        // uncertain and continue so other rows and new claims get a turn.
+        reconciled += 1;
+        uncertain += 1;
+        continue;
+      }
+      const state = await input.store.reconcile(
+        item.idempotencyKey,
+        receipt?.providerMessageId ?? null,
+      );
       reconciled += 1;
       if (state === "submitted") submitted += 1;
       else uncertain += 1;
@@ -91,20 +105,13 @@ export function createDispatchWorker(
     const claimToken = input.nextClaimToken();
     const item = await input.store.claim(claimToken, input.claimSeconds);
     if (!item) return { claimed: 0, submitted: 0, uncertain: 0 };
+    let receipt: ProviderReceipt;
     try {
-      const receipt = await input.transport.send({
+      receipt = await input.transport.send({
         idempotencyKey: item.idempotencyKey,
         destinationPhoneE164: item.destinationPhoneE164,
         messageText: item.messageText,
       });
-      const state = await input.store.recordOutcome({
-        outboxId: item.outboxId,
-        claimToken,
-        outcome: "accepted",
-        providerMessageId: receipt.providerMessageId,
-        errorCode: null,
-      });
-      return { claimed: 1, submitted: state === "submitted" ? 1 : 0, uncertain: state === "uncertain" ? 1 : 0 };
     } catch {
       // A transport exception cannot prove rejection; persist uncertainty.
       const state = await input.store.recordOutcome({
@@ -114,8 +121,24 @@ export function createDispatchWorker(
         providerMessageId: null,
         errorCode: "provider_outcome_unknown",
       });
-      return { claimed: 1, submitted: state === "submitted" ? 1 : 0, uncertain: state === "uncertain" ? 1 : 0 };
+      return {
+        claimed: 1,
+        submitted: state === "submitted" ? 1 : 0,
+        uncertain: state === "uncertain" ? 1 : 0,
+      };
     }
+    const state = await input.store.recordOutcome({
+      outboxId: item.outboxId,
+      claimToken,
+      outcome: "accepted",
+      providerMessageId: receipt.providerMessageId,
+      errorCode: null,
+    });
+    return {
+      claimed: 1,
+      submitted: state === "submitted" ? 1 : 0,
+      uncertain: state === "uncertain" ? 1 : 0,
+    };
   }
 
   return Object.freeze({

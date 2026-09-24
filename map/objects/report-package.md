@@ -104,6 +104,11 @@ These proofs use disposable synthetic data; there are no production source
 uploads or persistent clinical V2 Report rows.
 Later recipient delivery remains behind OI-06.
 
+The Studies dashboard now consumes the staff-authorized source-health response
+to show freshness, sync state, queue counts and local free space. Stale and
+unavailable reports are described as unknown, and the panel omits patient/study
+identifiers and raw error codes; see [staff health UI evidence](../../docs/evidence/38-staff-source-health-panel.md).
+
 ## See
 
 [Sharing release boundary](../../docs/01-final-clarity-v2-plan.md#37-sharing-viewing-and-release-restraint).

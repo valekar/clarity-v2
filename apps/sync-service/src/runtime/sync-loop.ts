@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { statfs } from "node:fs/promises";
+import { OrthancUnavailableError } from "../orthanc/errors.js";
 import type { InventoryCoordinator } from "../discovery/inventory-coordinator.js";
 import type { OrthancDiscoveryClient } from "../orthanc/discovery-client.js";
 import type { OrthancChangeFeedAdapter } from "../orthanc/change-feed.js";
@@ -14,6 +15,14 @@ import {
   stableStudyAdmissionKey,
   StaleUploadGenerationError,
 } from "../transfers/spool-instance.js";
+
+export function classifySyncFailure(error: unknown) {
+  const sourceUnavailable = error instanceof OrthancUnavailableError;
+  return Object.freeze({
+    sourceReachable: !sourceUnavailable,
+    lastErrorCode: sourceUnavailable ? ("orthanc_unavailable" as const) : ("sync_failed" as const),
+  });
+}
 
 export interface SyncLoopOptions {
   sourceKey: string;
@@ -48,7 +57,8 @@ export class SyncLoop {
   #stableObservedAt: string | null = null;
   #manifestCursor = "";
   #lastSuccessfulSyncAt: string | null = null;
-  #lastErrorCode: "orthanc_unavailable" | "low_spool_space" | "source_changed" | "sync_failed" | null = null;
+  #lastErrorCode:
+    "orthanc_unavailable" | "low_spool_space" | "source_changed" | "sync_failed" | null = null;
   #uploadCursor: string | null = null;
   readonly #admittedStudyObservations = new Map<string, string>();
   readonly #completedUploads = new Set<string>();
@@ -131,7 +141,11 @@ export class SyncLoop {
     await this.#admitDiscoveredBatch();
     if (this.#stableGeneration !== null) await this.#publishStableManifests();
     this.#lastSuccessfulSyncAt = new Date(now).toISOString();
-    await this.#publishHealth();
+    try {
+      await this.#publishHealth();
+    } catch {
+      this.#diagnostic("Source health report failed; retry scheduled on the next sync iteration");
+    }
   }
 
   async #publishHealth(
@@ -146,7 +160,10 @@ export class SyncLoop {
       const filesystem = await statfs(this.#options.spoolDirectory, { bigint: true });
       const freeBytes = filesystem.bavail * filesystem.bsize;
       const capacityBytes = filesystem.blocks * filesystem.bsize;
-      if (freeBytes <= BigInt(Number.MAX_SAFE_INTEGER) && capacityBytes <= BigInt(Number.MAX_SAFE_INTEGER)) {
+      if (
+        freeBytes <= BigInt(Number.MAX_SAFE_INTEGER) &&
+        capacityBytes <= BigInt(Number.MAX_SAFE_INTEGER)
+      ) {
         spoolFreeBytes = Number(freeBytes);
         spoolCapacityBytes = Number(capacityBytes);
       }
@@ -157,7 +174,11 @@ export class SyncLoop {
     const lastErrorCode = lowSpace ? "low_spool_space" : (errorCode ?? this.#lastErrorCode);
     await this.#cloud.reportHealth({
       sourceReachable,
-      syncState: lastErrorCode ? "attention" : counts.queuedStudies + counts.queuedUploads > 0 ? "syncing" : "idle",
+      syncState: lastErrorCode
+        ? "attention"
+        : counts.queuedStudies + counts.queuedUploads > 0
+          ? "syncing"
+          : "idle",
       lastErrorCode,
       ...counts,
       spoolFreeBytes,
@@ -305,10 +326,11 @@ export class SyncLoop {
       try {
         await this.runOnce();
         failures = 0;
-      } catch {
-        this.#lastErrorCode = "orthanc_unavailable";
+      } catch (error) {
+        const failure = classifySyncFailure(error);
+        this.#lastErrorCode = failure.lastErrorCode;
         try {
-          await this.#publishHealth(false, "orthanc_unavailable");
+          await this.#publishHealth(failure.sourceReachable, failure.lastErrorCode);
         } catch {
           // A cloud outage prevents recording the source outage; the server marks the prior row stale.
         }

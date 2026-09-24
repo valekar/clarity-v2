@@ -74,6 +74,8 @@ staff_hanko_subject='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2'
 psql --no-psqlrc --set ON_ERROR_STOP=1 --command "INSERT INTO staff_identities (id, staff_user_id, provider, issuer, subject) VALUES ('10000000-0000-4000-8000-000000000011', '$admin_user_id', 'hanko', 'https://hanko.example.invalid', '$admin_hanko_subject'), ('10000000-0000-4000-8000-000000000012', '$staff_user_id', 'hanko', 'https://hanko.example.invalid', '$staff_hanko_subject');"
 PGUSER=clarity_v2_runtime PGPASSWORD="$runtime_password" psql --no-psqlrc --set ON_ERROR_STOP=1 --command "SELECT change_staff_membership('$admin_user_id', '$staff_user_id', 0, 'staff', 'active');" >/dev/null
 pnpm --filter @clarity/database build
+pnpm --filter @clarity/messaging build
+node deploy/proof-database/prove-messaging-dispatch.mjs
 pnpm --filter @clarity/server build
 STAFF_PROOF_DATABASE_URL="postgresql://clarity_v2_runtime:$runtime_password@$PGHOST:$PGPORT/$PGDATABASE" \
 STAFF_PROOF_ADMIN_ID="$admin_user_id" \

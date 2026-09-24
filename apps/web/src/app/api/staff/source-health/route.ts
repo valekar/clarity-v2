@@ -13,7 +13,8 @@ export async function GET(request: Request): Promise<Response> {
     const now = Date.now();
     return jsonResponse({
       items: items.map((item) => {
-        const age = item.reportedAt === null ? Number.POSITIVE_INFINITY : now - Date.parse(item.reportedAt);
+        const age =
+          item.reportedAt === null ? Number.POSITIVE_INFINITY : now - Date.parse(item.reportedAt);
         const stale = !Number.isFinite(age) || age < 0 || age > STALE_AFTER_MS;
         const lowCapacity = item.spoolFreeBytes !== null && item.spoolFreeBytes <= 1_073_741_824;
         const status = stale

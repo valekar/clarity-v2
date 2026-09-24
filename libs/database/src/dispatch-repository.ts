@@ -45,6 +45,7 @@ export type DispatchPreparationRepository = Readonly<{
 
 export type DispatchDeliveryRepository = Readonly<{
   /** A database role with reviewed delivery-function grants is required. */
+  listUncertain(limit: number): Promise<readonly Readonly<{ idempotencyKey: string }>[]>;
   claim(claimToken: string, claimSeconds: number): Promise<ClaimedDispatch | null>;
   recordOutcome(
     input: Readonly<{
@@ -69,6 +70,24 @@ export type DispatchDeliveryRepository = Readonly<{
   close(): Promise<void>;
 }>;
 
+export type DispatchWorkerStoreAdapter = Readonly<{
+  claim(claimToken: string, claimSeconds: number): Promise<ClaimedDispatch | null>;
+  listUncertain(limit: number): Promise<readonly Readonly<{ idempotencyKey: string }>[]>;
+  recordOutcome(
+    input: Readonly<{
+      outboxId: string;
+      claimToken: string;
+      outcome: "accepted" | "unknown";
+      providerMessageId: string | null;
+      errorCode: string | null;
+    }>,
+  ): Promise<"submitted" | "uncertain">;
+  reconcile(
+    idempotencyKey: string,
+    providerMessageId: string | null,
+  ): Promise<"submitted" | "uncertain">;
+}>;
+
 type PreparedRow = QueryResultRow & {
   out_dispatch_id: unknown;
   out_state: unknown;
@@ -85,6 +104,7 @@ type ClaimRow = QueryResultRow & {
 };
 
 type StateRow = QueryResultRow & { state: unknown };
+type UncertainRow = QueryResultRow & { idempotency_key: unknown };
 
 function assertUuid(value: string, field: string): void {
   if (!uuid.test(value)) throw new TypeError(`${field} must be a UUID.`);
@@ -199,6 +219,27 @@ export function createDispatchPreparationRepository(pool: Pool): DispatchPrepara
 /** Separate interface/pool from staff preparation; grants are intentionally absent today. */
 export function createDispatchDeliveryRepository(pool: Pool): DispatchDeliveryRepository {
   return Object.freeze({
+    async listUncertain(limit): Promise<readonly Readonly<{ idempotencyKey: string }>[]> {
+      if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
+        throw new TypeError("Uncertain dispatch page size must be between 1 and 100.");
+      }
+      const result = await pool.query<UncertainRow>(
+        `SELECT idempotency_key FROM public.list_uncertain_dispatch_outbox($1)`,
+        [limit],
+      );
+      if (result.rows.length > limit) {
+        throw new Error("Dispatch repository returned too many uncertain rows.");
+      }
+      return Object.freeze(
+        result.rows.map((row) => {
+          if (typeof row.idempotency_key !== "string" || !uuid.test(row.idempotency_key)) {
+            throw new Error("Dispatch repository returned an invalid uncertain key.");
+          }
+          return Object.freeze({ idempotencyKey: row.idempotency_key });
+        }),
+      );
+    },
+
     async claim(claimToken, claimSeconds): Promise<ClaimedDispatch | null> {
       assertUuid(claimToken, "Claim token");
       if (!Number.isSafeInteger(claimSeconds) || claimSeconds < 1 || claimSeconds > 300) {
@@ -271,6 +312,38 @@ export function createDispatchDeliveryRepository(pool: Pool): DispatchDeliveryRe
     },
 
     close: async () => pool.end(),
+  });
+}
+
+/**
+ * Narrows the database delivery API to the synthetic worker contract. The
+ * worker cannot emit failed/delivered outcomes itself; unexpected SQL states
+ * stop the tick instead of being treated as normal worker results.
+ */
+export function createDispatchWorkerStore(
+  repository: DispatchDeliveryRepository,
+): DispatchWorkerStoreAdapter {
+  async function workerState(
+    operation: "recording provider outcome" | "reconciling provider receipt",
+    result: Promise<DispatchOutboxState>,
+  ): Promise<"submitted" | "uncertain"> {
+    const nextState = await result;
+    if (nextState !== "submitted" && nextState !== "uncertain") {
+      throw new Error(`Dispatch repository returned unsupported state while ${operation}.`);
+    }
+    return nextState;
+  }
+
+  return Object.freeze({
+    claim: (claimToken, claimSeconds) => repository.claim(claimToken, claimSeconds),
+    listUncertain: (limit) => repository.listUncertain(limit),
+    recordOutcome: (input) =>
+      workerState("recording provider outcome", repository.recordOutcome(input)),
+    reconcile: (idempotencyKey, providerMessageId) =>
+      workerState(
+        "reconciling provider receipt",
+        repository.reconcile(idempotencyKey, providerMessageId),
+      ),
   });
 }
 

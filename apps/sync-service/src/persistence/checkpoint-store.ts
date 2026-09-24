@@ -158,7 +158,9 @@ export class CheckpointStore {
   }
 
   getHealthCounts(sourceKey: string): Readonly<{ queuedStudies: number; queuedUploads: number }> {
-    const result = this.#db.prepare(`
+    const result = this.#db
+      .prepare(
+        `
       SELECT
         min(1000000, (
           SELECT count(*) FROM capture_job
@@ -169,7 +171,9 @@ export class CheckpointStore {
         )) AS queued_studies,
         min(1000000, (SELECT count(*) FROM local_instance_upload
            WHERE source_key = ? AND state != 'received')) AS queued_uploads
-    `).get(sourceKey, sourceKey, sourceKey) as { queued_studies: number; queued_uploads: number };
+    `,
+      )
+      .get(sourceKey, sourceKey, sourceKey) as { queued_studies: number; queued_uploads: number };
     return Object.freeze({
       queuedStudies: result.queued_studies,
       queuedUploads: result.queued_uploads,
@@ -402,6 +406,11 @@ export class CheckpointStore {
     this.#db
       .prepare("DELETE FROM capture_queue_lease WHERE source_key = ? AND owner_id = ?")
       .run(sourceKey, ownerId);
+  }
+
+  /** Clear crash residue only after the service's exclusive process lock is held. */
+  clearQueueLeaseAfterExclusiveServiceLock(sourceKey: string): void {
+    this.#db.prepare("DELETE FROM capture_queue_lease WHERE source_key = ?").run(sourceKey);
   }
 
   markComplete(jobId: number): void {

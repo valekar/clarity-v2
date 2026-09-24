@@ -8,12 +8,12 @@
 | [Buildable application shells and workspace packages](objects/foundation-shells.md) | object | live | verified | 2026-09-23 |
 | [V2 planning workspace](objects/planning-workspace.md) | object | live | verified | 2026-09-23 |
 | [Report and verified imaging package](objects/report-package.md) | object | ghost | stub | 2026-09-23 |
-| [Private source and synchronization service](objects/source-and-service.md) | object | ghost | stub | 2026-09-23 |
+| [Private source and synchronization service](objects/source-and-service.md) | object | ghost | stub | 2026-09-24 |
 | [Hanko identity and staff access](objects/staff-identity.md) | object | live | verified | 2026-09-23 |
 | [Record a conversation or change](processes/session-maintenance.md) | process | live | verified | 2026-09-23 |
 | [Separate installed V2 with automatic Orthanc intake](decisions/2026-09-23-v2-direction.md) | decision | live | verified | 2026-09-23 |
 | [Add policy-gated durable sharing outbox groundwork](sessions/2026-09-23-blocked-dispatch-outbox.md) | session | live | verified | 2026-09-23 |
-| [Add a connected compiled sync crash boundary](sessions/2026-09-23-compiled-sync-crash-recovery.md) | session | live | verified | 2026-09-23 |
+| [Expand compiled sync crash recovery boundaries](sessions/2026-09-23-compiled-sync-crash-recovery.md) | session | live | verified | 2026-09-24 |
 | [Prove connected synthetic ingestion and extract imaging identity reader](sessions/2026-09-23-connected-ingestion.md) | session | live | verified | 2026-09-23 |
 | [Prove connected late-file reopening and reseal](sessions/2026-09-23-connected-late-arrival.md) | session | live | verified | 2026-09-23 |
 | [Record disposable proof storage failure](sessions/2026-09-23-docker-storage-blocker.md) | session | live | verified | 2026-09-23 |
@@ -32,7 +32,16 @@
 | [Build the separate V2 monorepo scaffold](sessions/2026-09-23-v2-scaffold.md) | session | live | verified | 2026-09-23 |
 | [Add safe viewer compatibility states](sessions/2026-09-23-viewer-compatibility.md) | session | live | verified | 2026-09-23 |
 | [Test worker fence change across Orthanc effect gap](sessions/2026-09-23-worker-fence-effect-gap.md) | session | live | verified | 2026-09-23 |
+| [Run synthetic dispatch worker against PostgreSQL](sessions/2026-09-24-dispatch-worker-postgres-proof.md) | session | live | verified | 2026-09-24 |
+| [Add durable uncertain dispatch listing](sessions/2026-09-24-durable-uncertain-listing.md) | session | live | verified | 2026-09-24 |
+| [Recover synthetic cloud admission after service crash](sessions/2026-09-24-idempotent-admission-restart.md) | session | live | verified | 2026-09-24 |
 | [Run the local Clarity V2 preview](sessions/2026-09-24-local-preview-run.md) | session | live | verified | 2026-09-24 |
+| [Advance remaining Clarity V2 plan work with parallel agents](sessions/2026-09-24-multiagent-plan-progress.md) | session | live | verified | 2026-09-24 |
 | [Add bounded OHIF startup recovery](sessions/2026-09-24-ohif-startup-recovery.md) | session | live | verified | 2026-09-24 |
+| [Add fenced source health reporting and staff read API](sessions/2026-09-24-source-health.md) | session | live | verified | 2026-09-24 |
+| [Prove spool write and rename recovery after injected failures](sessions/2026-09-24-spool-atomic-failure.md) | session | live | verified | 2026-09-24 |
+| [Add staff source health status panel](sessions/2026-09-24-staff-source-health-ui.md) | session | live | verified | 2026-09-24 |
+| [Review staff Studies search pagination](sessions/2026-09-24-studies-pagination-review.md) | session | live | verified | 2026-09-24 |
 | [Add bounded synthetic dispatch tick and callback handler](sessions/2026-09-24-synthetic-dispatch-tick.md) | session | live | verified | 2026-09-24 |
+| [Add synthetic modality and non-image viewer fixtures](sessions/2026-09-24-synthetic-viewer-fixtures.md) | session | live | verified | 2026-09-24 |
 | [Set Windows sync service to start at boot](sessions/2026-09-24-windows-service-boot-start.md) | session | live | verified | 2026-09-24 |

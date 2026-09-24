@@ -4,6 +4,7 @@ import type { Pool } from "pg";
 import {
   createDispatchDeliveryRepository,
   createDispatchPreparationRepository,
+  createDispatchWorkerStore,
 } from "../src/dispatch-repository.ts";
 
 function fakePool(responseRows: readonly unknown[] = []) {
@@ -88,4 +89,43 @@ test("delivery role adapter keeps claim, callback and reconciliation calls narro
   assert.equal(calls.length, 1);
   assert.match(calls[0]!.text, /claim_dispatch_outbox/);
   assert.doesNotMatch(calls[0]!.text, /SELECT.+dispatch_outbox\b/i);
+});
+
+test("uncertain listing calls the bounded rotation function and validates returned keys", async () => {
+  const key = "93000000-0000-4000-8000-000000000001";
+  const { pool, calls } = fakePool([{ idempotency_key: key }]);
+  const repository = createDispatchDeliveryRepository(pool);
+  assert.deepEqual(await repository.listUncertain(20), [{ idempotencyKey: key }]);
+  assert.equal(calls.length, 1);
+  assert.match(calls[0]!.text, /list_uncertain_dispatch_outbox/);
+  assert.deepEqual(calls[0]!.values, [20]);
+});
+
+test("uncertain listing rejects unbounded limits and malformed repository rows", async () => {
+  const { pool, calls } = fakePool([{ idempotency_key: "not-a-uuid" }]);
+  const repository = createDispatchDeliveryRepository(pool);
+  await assert.rejects(repository.listUncertain(101), TypeError);
+  assert.equal(calls.length, 0);
+  await assert.rejects(repository.listUncertain(1), /invalid uncertain key/);
+  assert.equal(calls.length, 1);
+});
+
+test("worker adapter narrows unexpected database delivery states", async () => {
+  const { pool } = fakePool([{ state: "failed" }]);
+  const repository = createDispatchDeliveryRepository(pool);
+  const workerStore = createDispatchWorkerStore(repository);
+  await assert.rejects(
+    workerStore.recordOutcome({
+      outboxId: "96000000-0000-4000-8000-000000000001",
+      claimToken: "94000000-0000-4000-8000-000000000001",
+      outcome: "unknown",
+      providerMessageId: null,
+      errorCode: "synthetic_rejection",
+    }),
+    /unsupported state/,
+  );
+  await assert.rejects(
+    workerStore.reconcile("93000000-0000-4000-8000-000000000001", null),
+    /unsupported state/,
+  );
 });

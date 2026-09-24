@@ -4,8 +4,8 @@ type: object
 title: Private source and synchronization service
 universe: ghost
 status: stub
-updated: 2026-09-23
-revision: received-fence-recovery-config-file-2026-09-23
+updated: 2026-09-24
+revision: source-health-fenced-report-2026-09-24
 ---
 
 # Private source and synchronization service
@@ -42,7 +42,10 @@ preserve PatientID issuer and clear missing patient fields on a new source
 snapshot. Received/no-spool rows reconcile under the current cloud fence before
 source re-spooling; changed or missing source bytes persist a `needs-attention`
 state, and the `SyncLoop.runOnce()` regression verifies the recovery path. The
-normal entry accepts a bounded private `--config` JSON file while keeping
+focused [atomic spool failure proof](../../docs/evidence/40-spool-atomic-recovery.md)
+injects write ENOSPC and post-sync rename failures, then verifies SQLite reopen
+and exact-byte retry; native filesystem and installed-service proof remain open.
+The normal entry accepts a bounded private `--config` JSON file while keeping
 environment-only synthetic launches; macOS permission tests reject group/other
 access, while Windows ACL and installed-service proof remain open. A
 [scoped S3 admission helper](../../libs/storage/src/upload-admission.ts)
@@ -98,6 +101,26 @@ The [pairing proof](../../docs/evidence/21-device-pairing.md) now exercises
 one-time admin enrollment, a device-only credential, lease generation and
 revocation fences against disposable PostgreSQL. The compiled service used a
 paired credential in the separate-source proof; OS vault storage remains open.
+
+The compiled sync loop now posts a bounded operational report through the
+device-auth API. Reports are limited to reachability, queue counts, spool
+capacity, a small error code set and the last successful sync cycle; they do
+not include patient or study identifiers. PostgreSQL writes require the active
+device, source generation and lease fence, and the staff read rechecks active
+membership. The server marks missing or older-than-two-minute reports stale and
+hides reports from expired leases or superseded fences. The
+[source-health session](../sessions/2026-09-24-source-health.md) records the
+focused PostgreSQL 15 role/fence proof; connected service reporting and the full
+PostgreSQL 18 disposable proof remain unverified.
+
+The [compiled restart regression](../../docs/evidence/33-compiled-sync-crash-recovery.md)
+now crashes after cloud upload admission commits but before its response reaches
+SQLite. On restart, the local service clears only its source queue lease after
+acquiring the exclusive singleton lock, retries the same stable admission key,
+and reuses one cloud upload ID. The competing-process check confirms a process
+that cannot acquire the singleton lock cannot clear a queue lease. This remains
+local synthetic evidence; connected Docker and installed-service restart proofs
+are open. See the [session](../sessions/2026-09-24-idempotent-admission-restart.md).
 
 ## Connected to
 

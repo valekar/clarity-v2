@@ -68,7 +68,8 @@ export interface CloudLeaseHeartbeat {
 export type SourceHealthReport = Readonly<{
   sourceReachable: boolean;
   syncState: "idle" | "syncing" | "attention";
-  lastErrorCode: "orthanc_unavailable" | "low_spool_space" | "source_changed" | "sync_failed" | null;
+  lastErrorCode:
+    "orthanc_unavailable" | "low_spool_space" | "source_changed" | "sync_failed" | null;
   queuedStudies: number;
   queuedUploads: number;
   spoolFreeBytes: number | null;

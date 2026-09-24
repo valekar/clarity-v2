@@ -317,6 +317,36 @@ function localUploadState(sopInstanceUid) {
   }
 }
 
+function localSourcePollTime() {
+  if (!existsSync(databasePath)) return null;
+  const database = new Database(databasePath, { readonly: true, fileMustExist: true });
+  try {
+    const row = database
+      .prepare("SELECT updated_at FROM source_checkpoint WHERE source_key = ?")
+      .get(sourceId);
+    return typeof row?.updated_at === "string" ? row.updated_at : null;
+  } finally {
+    database.close();
+  }
+}
+
+async function waitForFreshSourcePoll(previousPollTime, processHandle) {
+  if (!previousPollTime || Number.isNaN(Date.parse(previousPollTime))) {
+    throw new Error("Post-import crash proof is missing a valid prior source poll.");
+  }
+  const deadline = Date.now() + 35_000;
+  while (Date.now() < deadline) {
+    if (childError) throw new Error("Could not restart compiled sync-service process.");
+    if (processHandle.exitCode !== null || processHandle.signalCode !== null) {
+      throw new Error("Compiled service exited before a fresh post-import source poll.");
+    }
+    const observed = localSourcePollTime();
+    if (observed && Date.parse(observed) > Date.parse(previousPollTime)) return observed;
+    await delay(250);
+  }
+  throw new Error("Restarted compiled service did not durably poll the source within 35 seconds.");
+}
+
 async function waitForDurableSpool(dicom, processHandle) {
   const deadline = Date.now() + 90_000;
   while (Date.now() < deadline) {
@@ -499,6 +529,7 @@ try {
   }
   const postImportOrthancInstanceId = await verifyCloudOrthanc(dicom);
   const postImportCrash = await killChildForRecovery(processHandle);
+  const sourcePollAfterPostImportKill = localSourcePollTime();
   const checkpointAfterPostImportKill = localUploadState(dicom.sopInstanceUid);
   const cloudAfterPostImportKill = cloudUploadState(dicom);
   assertReportAndUploadCounts(dicom, 1, uploadId);
@@ -516,6 +547,10 @@ try {
     );
   }
   processHandle = launchService(deviceAuthorization, false);
+  const sourcePollAfterPostImportRestart = await waitForFreshSourcePoll(
+    sourcePollAfterPostImportKill,
+    processHandle,
+  );
   const postImportRestartState = await waitForReady(dicom.studyInstanceUid, processHandle);
   const restartedOrthancInstanceId = await verifyCloudOrthanc(dicom);
   const postImportRestartCloud = cloudUploadState(dicom);
@@ -546,6 +581,7 @@ try {
     postImportCrashSignal: postImportCrash.signal,
     postImportCrashBoundary: "completed_cloud_upload_and_verified_orthanc_import",
     postImportRestartState,
+    postImportRestartPolledSource: Boolean(sourcePollAfterPostImportRestart),
     postImportRestartPreservedUploadAndInstance: true,
     durableSpoolSurvivedKill: true,
     crashBoundary,
@@ -567,7 +603,7 @@ try {
       "compiled sync-service reopened the same SQLite/spool paths and reached Ready",
       "one Report and one cloud upload remained after restart",
       "SIGKILL after the completed cloud upload, local received checkpoint, and exact Orthanc readback",
-      "compiled sync-service restarted from the received checkpoint without changing the cloud upload or Orthanc instance",
+      "compiled sync-service durably polled the source after restart without changing the cloud upload or Orthanc instance",
       "compiled sync-service stopped with SIGTERM after recovery",
     ],
   };

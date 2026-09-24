@@ -6,5 +6,5 @@
 - [Buildable application shells and workspace packages](foundation-shells.md) — live; verified; 2026-09-23.
 - [V2 planning workspace](planning-workspace.md) — live; verified; 2026-09-23.
 - [Report and verified imaging package](report-package.md) — ghost; stub; 2026-09-23.
-- [Private source and synchronization service](source-and-service.md) — ghost; stub; 2026-09-23.
+- [Private source and synchronization service](source-and-service.md) — ghost; stub; 2026-09-24.
 - [Hanko identity and staff access](staff-identity.md) — live; verified; 2026-09-23.

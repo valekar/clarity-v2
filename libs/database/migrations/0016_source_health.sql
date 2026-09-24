@@ -50,9 +50,7 @@ BEGIN
      p_queued_uploads NOT BETWEEN 0 AND 1000000 OR
      p_spool_free_bytes < 0 OR p_spool_capacity_bytes < 0 OR
      (p_spool_free_bytes IS NOT NULL AND p_spool_capacity_bytes IS NOT NULL AND
-       p_spool_free_bytes > p_spool_capacity_bytes) OR
-     (p_last_successful_sync_at IS NOT NULL AND
-       p_last_successful_sync_at > v_reported_at + interval '1 minute') THEN
+       p_spool_free_bytes > p_spool_capacity_bytes) THEN
     RAISE EXCEPTION 'source health report is invalid' USING ERRCODE = '23514';
   END IF;
   SELECT * INTO v_source FROM public.orthanc_sources WHERE id = p_source_id FOR UPDATE;
@@ -62,8 +60,10 @@ BEGIN
   IF v_source.id IS NULL OR v_device_status IS DISTINCT FROM 'paired'
      OR v_source.status <> 'active' OR v_source.generation <> p_generation
      OR v_source.current_fencing_token <> p_fencing_token
-     OR v_source.lease_device_id <> p_device_id
-     OR v_source.lease_expires_at <= v_reported_at THEN
+     OR v_source.lease_device_id IS DISTINCT FROM p_device_id
+     OR v_source.lease_expires_at IS NULL OR v_source.lease_expires_at <= v_reported_at
+     OR (p_last_successful_sync_at IS NOT NULL AND
+         p_last_successful_sync_at > v_reported_at + interval '1 minute') THEN
     RAISE EXCEPTION 'source health report has a stale device fence' USING ERRCODE = '23514';
   END IF;
   INSERT INTO public.source_health_reports (
@@ -135,6 +135,8 @@ BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'clarity_v2_migrator') THEN
     GRANT SELECT ON public.orthanc_sources, public.device_installations,
       public.staff_users, public.staff_memberships TO clarity_v2_migrator;
+    GRANT UPDATE (version) ON public.orthanc_sources TO clarity_v2_migrator;
+    GRANT UPDATE (version) ON public.device_installations TO clarity_v2_migrator;
     GRANT SELECT, INSERT, UPDATE ON public.source_health_reports TO clarity_v2_migrator;
     ALTER FUNCTION public.record_source_health(uuid, uuid, bigint, bigint, boolean, text, text, integer, integer, bigint, bigint, timestamptz) OWNER TO clarity_v2_migrator;
     ALTER FUNCTION public.read_source_health(uuid) OWNER TO clarity_v2_migrator;
