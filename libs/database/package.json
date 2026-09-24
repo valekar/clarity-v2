@@ -8,6 +8,10 @@
       "types": "./dist/doctor-repository.d.ts",
       "import": "./dist/doctor-repository.js"
     },
+    "./dispatch-repository": {
+      "types": "./dist/dispatch-repository.d.ts",
+      "import": "./dist/dispatch-repository.js"
+    },
     "./device-repository": {
       "types": "./dist/device-repository.d.ts",
       "import": "./dist/device-repository.js"
@@ -19,6 +23,10 @@
     "./staff-repository": {
       "types": "./dist/staff-repository.d.ts",
       "import": "./dist/staff-repository.js"
+    },
+    "./source-health-repository": {
+      "types": "./dist/source-health-repository.d.ts",
+      "import": "./dist/source-health-repository.js"
     },
     "./study-repository": {
       "types": "./dist/study-repository.d.ts",

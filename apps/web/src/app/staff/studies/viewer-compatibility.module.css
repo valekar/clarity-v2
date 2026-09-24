@@ -1,0 +1,41 @@
+.notice {
+  margin: 1rem 0;
+  padding: 0.85rem 1rem;
+  border: 1px solid #d5a34b;
+  border-radius: 0.5rem;
+  background: #fff8e8;
+  color: #513b16;
+  line-height: 1.45;
+}
+
+.notice h2 {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+}
+
+.notice ul {
+  margin: 0.35rem 0 0;
+  padding-left: 1.2rem;
+}
+
+.viewerStatus {
+  margin: 0.75rem 0;
+  color: #40515d;
+  line-height: 1.45;
+}
+
+.retryViewer {
+  margin: 0 0 0.75rem;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid #506b7b;
+  border-radius: 0.4rem;
+  background: #fff;
+  color: #183b50;
+  font: inherit;
+  cursor: pointer;
+}
+
+.retryViewer:focus-visible {
+  outline: 3px solid #126b9a;
+  outline-offset: 2px;
+}

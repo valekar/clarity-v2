@@ -6,6 +6,7 @@ import { OrthancChangeFeedAdapter } from "./orthanc/change-feed.js";
 import { OrthancDiscoveryClient } from "./orthanc/discovery-client.js";
 import { SyncLoop } from "./runtime/sync-loop.js";
 import { acquireServiceLock } from "./runtime/service-lock.js";
+import { loadRuntimeEnvironment } from "./runtime/config-file.js";
 import { IngestionClient } from "./transfers/ingestion-client.js";
 
 interface RuntimeConfig {
@@ -83,7 +84,7 @@ function config(environment: NodeJS.ProcessEnv): RuntimeConfig {
 async function main(): Promise<void> {
   let runtime: RuntimeConfig;
   try {
-    runtime = config(process.env);
+    runtime = config(await loadRuntimeEnvironment(process.argv.slice(2)));
   } catch {
     process.stderr.write(
       "sync service configuration is missing or invalid; service remains inactive\n",

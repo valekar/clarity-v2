@@ -104,6 +104,7 @@ interface CloudOptions {
   failStatusOnce?: boolean;
   alreadyReceived?: boolean;
   takeoverDuringPut?: boolean;
+  afterPutAccepted?: () => void;
 }
 
 async function cloudFixture(options: CloudOptions = {}) {
@@ -151,7 +152,7 @@ async function cloudFixture(options: CloudOptions = {}) {
         state.uploadStatus = "received";
         sendJson(response, {
           uploadId: "00000000-0000-4000-8000-000000000001",
-          status: "received",
+          status: state.uploadStatus,
         });
         return;
       }
@@ -192,6 +193,7 @@ async function cloudFixture(options: CloudOptions = {}) {
       state.putCalls += 1;
       const bytes = await bodyBytes(request);
       state.body = bytes;
+      options.afterPutAccepted?.();
       state.uploadStatus = "uploading";
       if (state.takeoverDuringPut)
         await new Promise((resolvePromise) => setTimeout(resolvePromise, 200));
@@ -266,7 +268,7 @@ async function cloudFixture(options: CloudOptions = {}) {
     response.writeHead(404).end();
   });
   const root = await listen(server);
-  return { root, state };
+  return { root, state, server };
 }
 
 function openStore(path: string): CheckpointStore {
@@ -415,6 +417,29 @@ test("changed Orthanc bytes stop admission and preserve the local snapshot for a
     SourceBytesChangedError,
   );
   assert.equal(cloud.state.authorizationCalls, 0);
+  assert.equal(store.uploads.get(upload.admissionKey)?.state, "needs-attention");
+  assert.ok(await stat(upload.spoolPath!));
+  store.close();
+});
+
+test("source mutation after signed PUT acceptance blocks cloud completion", async () => {
+  const source = await sourceFixture(Buffer.from("DICM-before-put"));
+  const store = openStore(join(directory, "changed-during-upload.sqlite"));
+  const upload = await spool(store, source.baseUrl, join(directory, "changed-during-upload-spool"));
+  const cloud = await cloudFixture({
+    mode: "put",
+    expectedBytes: Buffer.from("DICM-before-put"),
+    afterPutAccepted: () => {
+      source.state.bytes = Buffer.from("DICM-mutated-before-completion");
+    },
+  });
+  await assert.rejects(
+    uploader(store, source.baseUrl, cloud.root).send(upload),
+    SourceBytesChangedError,
+  );
+  assert.equal(cloud.state.putCalls, 1);
+  assert.equal(cloud.state.completionCalls, 0);
+  assert.equal(cloud.state.authorizationCalls, 1);
   assert.equal(store.uploads.get(upload.admissionKey)?.state, "needs-attention");
   assert.ok(await stat(upload.spoolPath!));
   store.close();

@@ -187,7 +187,7 @@ export class OrthancDiscoveryClient {
     return { study, instance };
   }
 
-  async openInstanceFile(orthancInstanceId: string): Promise<Response> {
+  async openInstanceFile(orthancInstanceId: string, signal?: AbortSignal): Promise<Response> {
     const base = this.#baseUrl.href.endsWith("/")
       ? this.#baseUrl
       : new URL(`${this.#baseUrl.href}/`);
@@ -198,7 +198,9 @@ export class OrthancDiscoveryClient {
         Accept: "application/dicom",
         ...(this.#authorization ? { Authorization: this.#authorization } : {}),
       },
-      signal: AbortSignal.timeout(60 * 60 * 1000),
+      signal: signal
+        ? AbortSignal.any([signal, AbortSignal.timeout(60 * 60 * 1000)])
+        : AbortSignal.timeout(60 * 60 * 1000),
     });
     if (!response.ok) {
       await response.body?.cancel().catch(() => undefined);

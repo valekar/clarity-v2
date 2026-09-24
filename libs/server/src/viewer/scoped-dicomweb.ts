@@ -59,7 +59,7 @@ function exactQueryUid(url: URL): string | null {
   return values.length === 1 && UID.test(values[0] ?? "") ? values[0]! : null;
 }
 
-function qidoQuery(url: URL, studyUid: string): URLSearchParams | null {
+function qidoQuery(url: URL, studyUid: string, includeStudyUid: boolean): URLSearchParams | null {
   const allowed = new Set([
     "studyinstanceuid",
     "limit",
@@ -69,23 +69,39 @@ function qidoQuery(url: URL, studyUid: string): URLSearchParams | null {
     "fuzzymatching",
   ]);
   for (const key of url.searchParams.keys()) {
-    if (!allowed.has(key.toLowerCase())) return null;
+    const normalizedKey = key.toLowerCase();
+    if (!allowed.has(normalizedKey) || (!includeStudyUid && normalizedKey === "studyinstanceuid"))
+      return null;
   }
   const output = new URLSearchParams();
-  output.set("StudyInstanceUID", studyUid);
+  if (includeStudyUid) output.set("StudyInstanceUID", studyUid);
   const limits = url.searchParams.getAll("limit");
   if (limits.length > 1 || (limits[0] !== undefined && !/^[1-9][0-9]{0,3}$/.test(limits[0])))
     return null;
-  output.set("limit", String(Math.min(Number(limits[0] ?? "200"), 1000)));
+  if (limits[0] !== undefined || includeStudyUid) {
+    output.set("limit", String(Math.min(Number(limits[0] ?? "200"), 1000)));
+  }
   const offsets = url.searchParams.getAll("offset");
   if (offsets.length > 1 || (offsets[0] !== undefined && !/^(0|[1-9][0-9]{0,7})$/.test(offsets[0])))
     return null;
   if (offsets[0]) output.set("offset", offsets[0]);
-  for (const key of ["includefield", "includefields"]) {
-    for (const value of url.searchParams.getAll(key)) {
-      if (value.length > 100 || !/^(?:all|[0-9a-fA-F]{4},[0-9a-fA-F]{4})$/.test(value)) return null;
-      output.append(key, value);
-    }
+  const includeFields = [...url.searchParams.entries()].filter(([key]) =>
+    ["includefield", "includefields"].includes(key.toLowerCase()),
+  );
+  if (includeFields.length > 100) return null;
+  const includeValues = includeFields.map(([, value]) => value);
+  if (
+    includeValues.some(
+      (value) =>
+        (value.length > 800 && value !== "all") ||
+        !/^(?:all|[0-9a-fA-F]{8}(?:,[0-9a-fA-F]{8}){0,99})$/.test(value),
+    ) ||
+    (includeValues.includes("all") && includeValues.length > 1)
+  ) {
+    return null;
+  }
+  for (const [key, value] of includeFields) {
+    output.append(key.toLowerCase(), value);
   }
   const fuzzy = url.searchParams.getAll("fuzzymatching");
   if (fuzzy.length > 1 || (fuzzy.length === 1 && fuzzy[0] !== "true" && fuzzy[0] !== "false"))
@@ -97,7 +113,7 @@ function qidoQuery(url: URL, studyUid: string): URLSearchParams | null {
 function parsePath(path: readonly string[], url: URL): ParsedPath | null {
   if (path.length === 1 && path[0] === "studies") {
     const uid = exactQueryUid(url);
-    const query = uid ? qidoQuery(url, uid) : null;
+    const query = uid ? qidoQuery(url, uid, true) : null;
     if (!uid || !query) return null;
     return {
       studyInstanceUid: uid,
@@ -108,9 +124,37 @@ function parsePath(path: readonly string[], url: URL): ParsedPath | null {
       qidoLevel: "study",
     };
   }
-  if (url.search.length > 0 || path[0] !== "studies" || path.length < 2) return null;
+  if (path[0] !== "studies" || path.length < 2) return null;
   const studyUid = path[1];
   if (!studyUid || !UID.test(studyUid)) return null;
+  if (path.length === 3 && path[2] === "series") {
+    const query = qidoQuery(url, studyUid, false);
+    if (!query) return null;
+    const suffix = url.search ? `?${query.toString()}` : "";
+    return {
+      studyInstanceUid: studyUid,
+      seriesInstanceUid: null,
+      sopInstanceUid: null,
+      upstreamPath: `studies/${studyUid}/series${suffix}`,
+      metadata: true,
+      qidoLevel: "series",
+    };
+  }
+  if (path.length === 5 && path[2] === "series" && path[4] === "instances") {
+    if (!UID.test(path[3] ?? "")) return null;
+    const query = qidoQuery(url, studyUid, false);
+    if (!query) return null;
+    const suffix = url.search ? `?${query.toString()}` : "";
+    return {
+      studyInstanceUid: studyUid,
+      seriesInstanceUid: path[3]!,
+      sopInstanceUid: null,
+      upstreamPath: `studies/${studyUid}/series/${path[3]}/instances${suffix}`,
+      metadata: true,
+      qidoLevel: "instance",
+    };
+  }
+  if (url.search.length > 0) return null;
   if (path.length === 3 && path[2] === "metadata") {
     return {
       studyInstanceUid: studyUid,
@@ -119,16 +163,6 @@ function parsePath(path: readonly string[], url: URL): ParsedPath | null {
       upstreamPath: `studies/${studyUid}/metadata`,
       metadata: true,
       qidoLevel: "instance",
-    };
-  }
-  if (path.length === 3 && path[2] === "series") {
-    return {
-      studyInstanceUid: studyUid,
-      seriesInstanceUid: null,
-      sopInstanceUid: null,
-      upstreamPath: `studies/${studyUid}/series`,
-      metadata: true,
-      qidoLevel: "series",
     };
   }
   if (path.length < 4 || path[2] !== "series" || !UID.test(path[3] ?? "")) return null;

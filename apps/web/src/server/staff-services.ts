@@ -1,6 +1,7 @@
 import "server-only";
 import { createStaffPool, createStaffRepository } from "@clarity/database/staff-repository";
 import { createStaffStudyRepository } from "@clarity/database/study-repository";
+import { createSourceHealthRepository } from "@clarity/database/source-health-repository";
 import { createHankoSessionAdapter } from "@clarity/server/auth/hanko-session";
 import { createStaffAccessGuard } from "@clarity/server/auth/require-staff-access";
 
@@ -9,6 +10,7 @@ let services:
       guard: ReturnType<typeof createStaffAccessGuard>;
       repository: ReturnType<typeof createStaffRepository>;
       studyRepository: ReturnType<typeof createStaffStudyRepository>;
+      sourceHealthRepository: ReturnType<typeof createSourceHealthRepository>;
     }>
   | undefined;
 
@@ -31,10 +33,12 @@ export function getStaffServices() {
   const pool = createStaffPool({ connectionString: requiredEnvironment("DATABASE_URL") });
   const repository = createStaffRepository(pool);
   const studyRepository = createStaffStudyRepository(pool);
+  const sourceHealthRepository = createSourceHealthRepository(pool);
   services = Object.freeze({
     guard: createStaffAccessGuard({ sessionAdapter: adapter, repository }),
     repository,
     studyRepository,
+    sourceHealthRepository,
   });
   return services;
 }

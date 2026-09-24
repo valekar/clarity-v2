@@ -132,23 +132,24 @@ try {
   const bytes = await readFile(dicomPath);
   const fileSha = sha(bytes);
   const studyAdmissionKey = randomUUID();
+  const studyBody = {
+    admissionKey: studyAdmissionKey,
+    ...fence,
+    studyInstanceUid,
+    orthancStudyId: "synthetic-orthanc-study",
+    patientId: "SYNTHETIC-ONLY",
+    patientIssuerOfPatientId: "SYNTHETIC-AUTHORITY",
+    patientName: "SYNTHETIC^PROOF",
+    patientBirthDate: null,
+    patientSex: "U",
+    studyDate: "20260923",
+    studyTime: "120000",
+  };
   const study = await jsonRequest("/api/ingestion/studies", {
     method: "POST",
     credential: credentials[0],
     headers: { "idempotency-key": studyAdmissionKey },
-    body: {
-      admissionKey: studyAdmissionKey,
-      ...fence,
-      studyInstanceUid,
-      orthancStudyId: "synthetic-orthanc-study",
-      patientId: "SYNTHETIC-ONLY",
-      patientIssuerOfPatientId: "SYNTHETIC-AUTHORITY",
-      patientName: "SYNTHETIC^PROOF",
-      patientBirthDate: null,
-      patientSex: "U",
-      studyDate: "20260923",
-      studyTime: "120000",
-    },
+    body: studyBody,
   });
   if (study.studyInstanceUid !== studyInstanceUid)
     throw new Error("Study admission returned another Study UID.");
@@ -171,6 +172,15 @@ try {
   if (upload.mode !== "put" || typeof upload.put?.url !== "string")
     throw new Error("Synthetic object did not receive a single-part upload URL.");
 
+  // File admission advances the Report CAS. A real sync loop refreshes the
+  // Study observation before publishing its stable inventory.
+  const manifestStudy = await jsonRequest("/api/ingestion/studies", {
+    method: "POST",
+    credential: credentials[0],
+    headers: { "idempotency-key": studyAdmissionKey },
+    body: studyBody,
+  });
+
   const manifestAttemptId = randomUUID();
   const manifestMembers = [{ sopInstanceUid, sha256: fileSha }];
   const observedManifestDigest = sha(JSON.stringify(manifestMembers));
@@ -181,7 +191,7 @@ try {
       ...fence,
       inventoryAttemptId: manifestAttemptId,
       expectedCurrentRevision: null,
-      expectedReportVersion: study.version,
+      expectedReportVersion: manifestStudy.version,
     },
   });
   if (begin.revision !== 1) throw new Error("Manifest draft was not created at revision 1.");
@@ -192,7 +202,7 @@ try {
       ...fence,
       inventoryAttemptId: manifestAttemptId,
       revision: begin.revision,
-      expectedReportVersion: study.version,
+      expectedReportVersion: manifestStudy.version,
       members: manifestMembers,
     },
   });
@@ -205,7 +215,7 @@ try {
       inventoryAttemptId: manifestAttemptId,
       revision: begin.revision,
       expectedCurrentRevision: null,
-      expectedReportVersion: study.version,
+      expectedReportVersion: manifestStudy.version,
       sourceObservedAt: new Date().toISOString(),
       sourceStable: true,
       inventoryComplete: true,
@@ -260,6 +270,128 @@ try {
     throw new Error(
       `Worker did not reach the expected sealed/indexed Ready state (got ${state || "no rows"}).`,
     );
+
+  // Admit a later SOP after revision 1 is Ready. The worker may index it before
+  // inventory revision 2 is sealed; the Report must stay closed to viewers and
+  // new dispatches until the fresh exact inventory is committed.
+  const latePath = join(temp, "synthetic-late.dcm");
+  const lateGenerated = spawnSync("python3", [generator, latePath, "1", "2"], {
+    encoding: "utf8",
+    timeout: 10_000,
+  });
+  if (lateGenerated.status !== 0)
+    throw new Error(`Late synthetic DICOM generation failed: ${lateGenerated.stderr.trim()}`);
+  const [lateStudyUid, lateSeriesUid, lateSopUid] = lateGenerated.stdout.trim().split("\t");
+  if (
+    lateStudyUid !== studyInstanceUid ||
+    lateSeriesUid !== seriesInstanceUid ||
+    !lateSopUid ||
+    lateSopUid === sopInstanceUid
+  )
+    throw new Error("Late synthetic DICOM did not share the original Study and Series.");
+  const lateBytes = await readFile(latePath);
+  const lateSha = sha(lateBytes);
+  const lateAdmissionKey = randomUUID();
+  const lateUpload = await jsonRequest("/api/ingestion/uploads", {
+    method: "POST",
+    credential: credentials[0],
+    headers: { "idempotency-key": lateAdmissionKey },
+    body: {
+      admissionKey: lateAdmissionKey,
+      ...fence,
+      orthancInstanceId: "synthetic-orthanc-late-instance",
+      studyInstanceUid,
+      seriesInstanceUid,
+      sopInstanceUid: lateSopUid,
+      byteCount: lateBytes.byteLength,
+      sha256: lateSha,
+    },
+  });
+  if (lateUpload.mode !== "put" || typeof lateUpload.put?.url !== "string")
+    throw new Error("Late synthetic object did not receive a single-part upload URL.");
+  const reopened = psql(
+    `SELECT state||'|'||manifest_dirty::text||'|'||current_manifest_revision FROM public.reports WHERE id='${study.reportId}';`,
+  );
+  if (reopened !== "processing|true|1")
+    throw new Error(`Late admission did not reopen the revision-1 Report (${reopened}).`);
+  const latePut = await fetch(lateUpload.put.url, {
+    method: "PUT",
+    headers: lateUpload.put.headers,
+    body: lateBytes,
+  });
+  if (!latePut.ok) throw new Error(`Signed late upload returned HTTP ${latePut.status}.`);
+  const lateComplete = await jsonRequest(`/api/ingestion/uploads/${lateUpload.uploadId}/complete`, {
+    method: "POST",
+    credential: credentials[0],
+    body: { ...fence, byteCount: lateBytes.byteLength, sha256: lateSha, parts: [] },
+  });
+  if (lateComplete.status !== "received") throw new Error("Late upload was not durably received.");
+  let lateIndexed = "";
+  for (let attempt = 0; attempt < 120; attempt += 1) {
+    lateIndexed = psql(
+      `SELECT r.state||'|'||r.manifest_dirty::text||'|'||f.state||'|'||u.status FROM public.reports r JOIN public.report_files f ON f.report_id=r.id JOIN public.ingestion_uploads u ON u.report_file_id=f.id WHERE r.id='${study.reportId}' AND f.sop_instance_uid='${lateSopUid}' AND u.id='${lateUpload.uploadId}';`,
+    );
+    if (lateIndexed === "processing|true|indexed|completed") break;
+    await new Promise((resolveWait) => setTimeout(resolveWait, 500));
+  }
+  if (lateIndexed !== "processing|true|indexed|completed")
+    throw new Error(`Late worker import bypassed or stalled before reseal (${lateIndexed}).`);
+
+  const refreshedStudy = await jsonRequest("/api/ingestion/studies", {
+    method: "POST",
+    credential: credentials[0],
+    headers: { "idempotency-key": studyAdmissionKey },
+    body: studyBody,
+  });
+  const lateAttemptId = randomUUID();
+  const lateMembers = [
+    { sopInstanceUid, sha256: fileSha },
+    { sopInstanceUid: lateSopUid, sha256: lateSha },
+  ];
+  const lateBegin = await jsonRequest(`/api/ingestion/reports/${study.reportId}/manifest/begin`, {
+    method: "POST",
+    credential: credentials[0],
+    body: {
+      ...fence,
+      inventoryAttemptId: lateAttemptId,
+      expectedCurrentRevision: 1,
+      expectedReportVersion: refreshedStudy.version,
+    },
+  });
+  if (lateBegin.revision !== 2) throw new Error("Late inventory did not begin revision 2.");
+  const latePage = await jsonRequest(`/api/ingestion/reports/${study.reportId}/manifest/pages`, {
+    method: "POST",
+    credential: credentials[0],
+    body: {
+      ...fence,
+      inventoryAttemptId: lateAttemptId,
+      revision: 2,
+      expectedReportVersion: refreshedStudy.version,
+      members: lateMembers,
+    },
+  });
+  if (latePage.accepted !== 2) throw new Error("Late inventory did not persist both SOPs.");
+  const lateSealed = await jsonRequest(`/api/ingestion/reports/${study.reportId}/manifest/seal`, {
+    method: "POST",
+    credential: credentials[0],
+    body: {
+      ...fence,
+      inventoryAttemptId: lateAttemptId,
+      revision: 2,
+      expectedCurrentRevision: 1,
+      expectedReportVersion: refreshedStudy.version,
+      sourceObservedAt: new Date().toISOString(),
+      sourceStable: true,
+      inventoryComplete: true,
+      observedManifestDigest: sha(JSON.stringify(lateMembers)),
+    },
+  });
+  if (lateSealed.sealed !== true) throw new Error("Late complete inventory did not seal.");
+  const resealed = psql(
+    `SELECT state||'|'||manifest_dirty::text||'|'||current_manifest_revision FROM public.reports WHERE id='${study.reportId}';`,
+  );
+  if (resealed !== "ready|false|2")
+    throw new Error(`Fresh late inventory did not restore Ready revision 2 (${resealed}).`);
 
   const orthancBase = process.env.CLARITY_PROOF_ORTHANC_URL;
   const orthancUser = process.env.ORTHANC_HTTP_USERNAME;
@@ -396,6 +528,12 @@ try {
     dicomwebAccessible: true,
     reportState: "ready",
     sourceOffline: true,
+    lateArrival: {
+      sopInstanceUid: lateSopUid,
+      reopenedBeforeSeal: true,
+      indexedBeforeSeal: true,
+      resealedRevision: 2,
+    },
     proof: [
       "pairing consume",
       "cloud lease",
@@ -404,6 +542,7 @@ try {
       "server size/hash verification",
       "manifest seal",
       "worker import and atomic state completion",
+      "connected late admission and exact revision-2 reseal",
       "idempotent received retry",
       "Orthanc UID and byte readback",
       "lease takeover denial",

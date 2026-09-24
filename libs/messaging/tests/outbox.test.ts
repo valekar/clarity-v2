@@ -64,7 +64,10 @@ test("unknown provider outcome remains uncertain when reconciliation finds nothi
   assert.equal(reconciled.ok, true);
   if (reconciled.ok) {
     assert.equal(reconciled.value.state, "uncertain");
-    assert.equal(claimQueuedIntent(reconciled.value, "new-claim-token", now, claimExpiry).ok, false);
+    assert.equal(
+      claimQueuedIntent(reconciled.value, "new-claim-token", now, claimExpiry).ok,
+      false,
+    );
   }
 });
 

@@ -13,12 +13,12 @@ application runtime must not own schema objects or receive direct `UPDATE` acces
 to `reports.state`; provisioning must grant only required table operations and
 explicit `EXECUTE` on reviewed functions. `acquire_source_lease`,
 `advance_source_generation`, `seal_report_revision` and
-`reconcile_ingestion_upload_status` revoke the default PUBLIC execute grant. The
-narrow recovery function is `SECURITY DEFINER`, pins `search_path`, and is intended
-to be owned by the non-login migration role; provisioning may grant its EXECUTE
-privilege only to the authenticated server runtime. Public schema CREATE is
-revoked before this function is installed. The disposable proof exercises that
-role split, but production role creation and grants remain deployment work.
+`reconcile_ingestion_upload_status` revoke the default PUBLIC execute grant.
+`reconcile_ingestion_upload_status` is deliberately unavailable to runtime roles:
+only the fenced worker completion path may mark a received upload completed after
+cloud indexing and file reconciliation. Public schema CREATE is revoked before
+privileged functions are installed. The disposable proof exercises the role
+boundary, but production role creation and grants remain deployment work.
 
 Migration `0003_staff_access.sql` adds pending Hanko identity enrollment, the
 operator-only one-time first-admin bootstrap, serialized membership and user
@@ -50,3 +50,12 @@ Source observations preserve generation-specific Orthanc locator history while
 logical Report and file IDs stay fixed across source resets. The disposable
 database proof covers this migration; production role grants still require the
 cloud provisioning path.
+
+Migration `0015_manifest_admission_cutoff.sql` durably marks a Report's manifest
+dirty when device admission introduces a file outside its current sealed member
+set. Worker completion may index that file, but readiness remains processing
+until a fresh complete manifest seal atomically clears the marker and reconciles
+all members. The read and dispatch boundaries continue to require Report state
+`ready`; a dirty Report cannot satisfy the database Ready check. Historic files
+may be excluded by a fresh manifest, so readiness is scoped to exact current
+members rather than every file ever observed.

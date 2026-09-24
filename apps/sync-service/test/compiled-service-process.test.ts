@@ -91,6 +91,7 @@ test("compiled production service discovers, uploads and seals one synthetic stu
   };
   let sealCalls = 0;
   let loseFirstSealResponse = true;
+  let uploadStatus = "admitted";
   const cloud = createServer(async (request, response) => {
     const url = new URL(request.url ?? "/", "http://localhost");
     calls.push(`${request.method} ${url.pathname}`);
@@ -112,6 +113,9 @@ test("compiled production service discovers, uploads and seals one synthetic stu
       });
     }
     if (url.pathname === "/api/ingestion/uploads") {
+      if (uploadStatus === "received" || uploadStatus === "completed") {
+        return json(response, { uploadId, status: uploadStatus });
+      }
       return json(response, {
         uploadId,
         expiresAt: new Date(Date.now() + 60_000).toISOString(),
@@ -126,13 +130,18 @@ test("compiled production service discovers, uploads and seals one synthetic stu
       const chunks: Buffer[] = [];
       for await (const chunk of request) chunks.push(Buffer.from(chunk));
       receivedBytes = Buffer.concat(chunks);
+      uploadStatus = "uploading";
       response
         .writeHead(200, { etag: `"${createHash("sha256").update(receivedBytes).digest("hex")}"` })
         .end();
       return;
     }
-    if (url.pathname === `/api/ingestion/uploads/${uploadId}/complete`)
+    if (url.pathname === `/api/ingestion/uploads/${uploadId}/complete`) {
+      uploadStatus = "received";
       return json(response, { status: "received" });
+    }
+    if (url.pathname === `/api/ingestion/uploads/${uploadId}`)
+      return json(response, { status: uploadStatus });
     if (url.pathname === `/api/ingestion/reports/${reportId}/manifest/begin`)
       return json(response, { revision: 1 });
     if (url.pathname === `/api/ingestion/reports/${reportId}/manifest/pages`)

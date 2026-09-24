@@ -19,8 +19,22 @@ Reports out of Ready and increments versions in the same transaction, invalidati
 old fences and compare-and-swap expectations. The proof checks role denial for
 the staff web runtime. Generated UIDs and bytes were synthetic.
 
-P4.2 remains open. This proof invokes the trusted SQL functions directly; a
-continuously running device has not yet submitted a complete source inventory
-through P3.4 cloud admission. Quiet-but-incomplete source behavior and frozen
-dispatch scope still need connected acceptance. No clinic Orthanc, production
-database or recipient delivery was used.
+The [reverse-order admission cutoff proof](28-manifest-admission-cutoff.md)
+extends the disposable PostgreSQL suite through migration 0015. It admits and
+indexes a late SOP before sealing revision 2, keeps the Report non-Ready until
+that fresh seal, and preserves a revision-1 dispatch's frozen scope. It also
+proves the runtime cannot mark an upload completed outside the worker path.
+The earlier disposable PostgreSQL proof runs as part of the 14-migration suite.
+It admits a late SOP after a revision-1 dispatch was created,
+opens and seals revision 2, and confirms that worker indexing restores Report
+readiness while the existing dispatch remains bound to revision 1 and its
+original recipient snapshot. It also rejects sealing when the caller reports
+the source inventory as incomplete. See the [late-manifest dispatch-scope
+proof](../../deploy/proof-database/late-manifest-dispatch-scope.sql) and the
+[dispatch evidence](27-policy-gated-dispatch-outbox.md).
+
+P4.2 remains open. These are trusted SQL proofs, not a continuously running
+device inventory or a connected late-arrival/restart exercise. The incomplete
+case proves that an explicit `inventory_complete=false` cannot seal; it does
+not establish how quiet-but-incomplete Orthanc studies are detected. No clinic
+Orthanc, production database or recipient delivery was used.

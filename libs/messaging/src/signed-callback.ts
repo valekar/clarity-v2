@@ -5,7 +5,12 @@ export type CallbackParseResult =
   | Readonly<{ ok: true; event: ProviderCallback }>
   | Readonly<{
       ok: false;
-      reason: "invalid_secret" | "invalid_timestamp" | "stale_timestamp" | "invalid_signature" | "invalid_body";
+      reason:
+        | "invalid_secret"
+        | "invalid_timestamp"
+        | "stale_timestamp"
+        | "invalid_signature"
+        | "invalid_body";
     }>;
 
 const signaturePattern = /^sha256=([a-f0-9]{64})$/i;
@@ -17,14 +22,16 @@ const timestampPattern = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,3})?Z$/;
  * deduplicate `event.eventId` and update the matching outbox row in one DB
  * transaction; this function authenticates and validates bytes only.
  */
-export function verifyProviderCallback(input: Readonly<{
-  secret: string;
-  signature: string;
-  timestamp: string;
-  rawBody: string;
-  now?: number;
-  toleranceMs?: number;
-}>): CallbackParseResult {
+export function verifyProviderCallback(
+  input: Readonly<{
+    secret: string;
+    signature: string;
+    timestamp: string;
+    rawBody: string;
+    now?: number;
+    toleranceMs?: number;
+  }>,
+): CallbackParseResult {
   if (input.secret.length < 32 || input.secret.length > 512) {
     return { ok: false, reason: "invalid_secret" };
   }

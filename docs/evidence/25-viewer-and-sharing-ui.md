@@ -60,24 +60,86 @@ current P4.3/P4.4 and P6.2 UI increment. It does not close those plan items.
 
 ## Browser UI check
 
-- In Chrome, the live disposable Hanko Elements sign-in accepted the generated
-  admin identity and redirected to `/staff`. The Studies page showed the connected
-  source-offline synthetic `SYNTHETIC^PROOF` Report as Ready. Clicking `Open study`
-  navigated to `/staff/studies/<reportId>` and displayed the verified-cloud study
-  header.
-- The embedded OHIF frame then displayed Chrome's
-  `chrome-error://chromewebdata/` message, “This page has been blocked by Chrome.”
-  No OHIF toolbar or image pixels loaded. This is a browser integration failure;
-  the authenticated HTTP proof of OHIF application HTML does not override it.
-- The retained proof log does not contain the iframe's initial HTTP status,
-  redirect Location, CSP/X-Frame-Options headers, or asset request statuses. The
-  disposable stack and private fixture were removed by cleanup, so the specific
-  Chrome block cause is not established. No proxy change is justified from this
-  capture alone.
-- A narrow viewport could not be set with the available browser controls. No
-  narrow-width, keyboard-navigation, loading-state, or viewer-error recovery test
-  is claimed. The browser proof's bounded opt-in hold auto-continued into the
-  replacement/restore checks and cleanup.
+- `CLARITY_VIEWER_BROWSER_DIAGNOSTIC=1 CLARITY_COMPILED_SYNC_PROOF=1 bash
+deploy/cloud/scripts/proof.sh` exited 0 through migration, Hanko, connected
+  ingestion, browser diagnostic, separate-source compiled service-to-Ready,
+  replacement and restore checks. The authenticated Study search and link to
+  `/staff/studies/<reportId>` passed with the source-offline synthetic Report
+  shown as Ready.
+- The combined viewer and multipart disposable proof exited 0. Chromium at
+  375×812 reported visible Studies/Doctors/Settings navigation, no horizontal
+  overflow, successful study search/open, and iframe/top-level OHIF HTTP 200.
+  That earlier diagnostic observed the OHIF application root and one canvas; scoped
+  study and series QIDO requests returned HTTP 200. It also observed a second
+  `/studies` query without a Study UID and returned HTTP 400. That denial is
+  expected: the gateway requires an explicit authorized Study UID and does not
+  expose an unscoped Orthanc worklist. The sanitized request record classified
+  the extra parameter only as `other_key`/`other`; its name/value were not
+  emitted. The observed QIDO status summary was four HTTP 200 responses and one
+  HTTP 400 across five same-origin DICOMweb responses.
+- Comparing the gateway parser with the official
+  [OHIF QIDO implementation](https://docs.ohif.org/coverage/extensions/default/src/dicomwebdatasource/qido.js)
+  suggests the QIDO compatibility gap: OHIF forms comma-separated include-field
+  tag lists and calls nested series and instance routes. The previous gateway
+  parser rejected comma-separated tag lists and query parameters on nested
+  routes. The updated browser proof confirmed the scoped study and series QIDO
+  paths with comma-separated 8-hex include tags, and the focused regression
+  covers those forms plus manifest filtering and unscoped-query denial. The safe
+  query collector emitted names from a fixed allowlist or `other_key`, with
+  value-shape enums only.
+- A synthetic frame Fetch failed once while a request in the same route
+  class returned HTTP 200. Chromium reported neither a blocked reason nor a CORS
+  error. The available summary cannot distinguish cancellation from another
+  fetch failure, so frame retry/recovery remains open.
+
+## Synthetic pixel assertion follow-up
+
+- The shared proof DICOM is now an 8×8 unsigned 16-bit MONOCHROME2 synthetic
+  image. Its quadrants contain ascending values 0, 21845, 43690 and 65535.
+  In response to the [OHIF 3.11 technical FAQ](https://docs.ohif.org/3.11/faq/technical/),
+  it also carries mandatory `PixelSpacing=1\\1` and the FAQ's rendering tags:
+  `WindowCenter=32768`, `WindowWidth=65536`, `RescaleSlope=1` and
+  `RescaleIntercept=0`. `InstanceNumber=1` is present for sorting. Image position
+  and orientation were not added because the FAQ lists them for MPR, which this
+  single-image proof does not exercise.
+  The browser diagnostic captures Chromium's actual canvas screenshot, decodes
+  its PNG pixels and requires four spatial samples to be grayscale and strictly
+  ascending with visible contrast. It ignores canvases smaller than 64×64 so
+  small UI canvases cannot satisfy the image assertion.
+- An initial strict run failed because the mobile OHIF sidebar left its main
+  canvas 16 pixels wide; a synthetic-only screenshot showed the pattern in the
+  series thumbnail behind OHIF's first-run walkthrough and investigational-use
+  notice. The diagnostic now keeps the staff search/study checks at 375×812,
+  reloads the same report at 1280×900, dismisses both notices and clicks the
+  series thumbnail before sampling.
+- The latest full `CLARITY_VIEWER_BROWSER_DIAGNOSTIC=1 bash
+  deploy/cloud/scripts/proof.sh` run exited 0 on the fifteen-migration schema
+  and cleaned its disposable stack. The source-offline synthetic Ready study
+  passed authenticated search, exact scoped QIDO and WADO checks. At 1280×900,
+  after the three UI actions, OHIF's canvas was 858×649 pixels (CSS 857×648).
+  Chromium screenshot samples from the four synthetic quadrants were grayscale
+  luminance [28, 113, 170, 255] in ascending order, so the strict four-region
+  contrast assertion passed. The mobile staff page remained 375×812 with visible
+  navigation and no horizontal overflow; the OHIF viewer itself was evaluated
+  at the wide viewport, not at mobile width.
+- The final run recorded six same-origin DICOMweb responses: five HTTP 200 and
+  one HTTP 400 for the intentionally unscoped worklist query. Two frame
+  responses returned HTTP 200 with `multipart/related`; two additional frame
+  Fetches were canceled as `net::ERR_ABORTED`. Chromium reported no CORS or
+  blocked reason. Category-only console output included `not_found`, `other`
+  (three events) and `dicom_runtime`; the visible-text checks found no error,
+  loading, no-image or retry message. The successful run needed no failure
+  screenshot. Exact Study scope and gateway authorization were unchanged.
+
+This proves one tiny synthetic unsigned 16-bit MONOCHROME2 pixel pattern through
+the browser rendering path. It does not establish CT variation, MR, non-image
+DICOM, compressed transfer syntax/codec support, diagnostic suitability, or
+OHIF layout at mobile width. These remain P4.3 acceptance work. No clinic data
+was used.
+
+This is not evidence of CT/MR variation, compressed transfer syntax or codec
+breadth, non-image DICOM support, diagnostic suitability, keyboard interaction,
+or loading/error recovery. No clinic data was used.
 
 ## Checks
 
@@ -96,9 +158,9 @@ current P4.3/P4.4 and P6.2 UI increment. It does not close those plan items.
   usage checks passed.
 
 No manual screen-reader or narrow responsive-viewport session was run for these
-new surfaces. The browser interaction verified search-to-study navigation but
-failed at embedded OHIF load, so it does not establish actual viewer rendering or
-diagnostic suitability. CT and MR variation, non-image DICOM, compressed transfer
+new surfaces. The browser interaction verified search-to-study navigation and
+an OHIF iframe HTTP navigation at a narrow viewport, but did not establish
+actual viewer rendering or diagnostic suitability. CT and MR variation, non-image DICOM, compressed transfer
 syntax/codec behavior, and browser viewer recovery remain open. No real recipient,
 patient fixture, or external message was used in the UI checks.
 

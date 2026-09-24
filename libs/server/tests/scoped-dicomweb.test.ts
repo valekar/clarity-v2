@@ -130,6 +130,81 @@ test("scopes QIDO results to current manifest members and disables browser cache
   assert.equal((body[0] as Record<string, unknown>)["00080018"] !== undefined, true);
 });
 
+test("accepts OHIF QIDO include-field tags on study, series, and instance queries", async () => {
+  const { gateway, calls } = fixture({
+    upstream: (request) => {
+      assert.equal(request.headers.get("accept"), "application/dicom+json");
+      return Response.json([
+        {
+          "0020000D": { Value: [STUDY_UID] },
+          "0020000E": { Value: [SERIES_UID] },
+          "00080018": { Value: [SOP_UID] },
+        },
+      ]);
+    },
+  });
+  const request = async (path: string, segments: string[]) =>
+    gateway.handle(new Request(`https://staff.example.test${path}`), segments);
+
+  const study = await request(
+    `/dicom-web/studies?limit=101&offset=0&fuzzymatching=true&includefield=00081030%2C00080060&StudyInstanceUID=${STUDY_UID}`,
+    ["studies"],
+  );
+  const series = await request(
+    `/dicom-web/studies/${STUDY_UID}/series?limit=101&offset=0&fuzzymatching=false&includefield=0008103E%2C00080021`,
+    ["studies", STUDY_UID, "series"],
+  );
+  const instances = await request(
+    `/dicom-web/studies/${STUDY_UID}/series/${SERIES_UID}/instances?includefield=all`,
+    ["studies", STUDY_UID, "series", SERIES_UID, "instances"],
+  );
+  const expandedScope = await request(
+    `/dicom-web/studies/${STUDY_UID}/series?StudyInstanceUID=1.2.840.999`,
+    ["studies", STUDY_UID, "series"],
+  );
+  const arbitraryFilter = await request(
+    `/dicom-web/studies/${STUDY_UID}/series?PatientName=synthetic`,
+    ["studies", STUDY_UID, "series"],
+  );
+
+  assert.deepEqual([study.status, series.status, instances.status], [200, 200, 200]);
+  assert.deepEqual([expandedScope.status, arbitraryFilter.status], [400, 400]);
+  assert.equal(calls.length, 3);
+  assert.equal(
+    calls[0]?.url,
+    `http://orthanc:8042/dicom-web/studies?StudyInstanceUID=${STUDY_UID}&limit=101&offset=0&includefield=00081030%2C00080060&fuzzymatching=true`,
+  );
+  assert.equal(
+    calls[1]?.url,
+    `http://orthanc:8042/dicom-web/studies/${STUDY_UID}/series?limit=101&offset=0&includefield=0008103E%2C00080021&fuzzymatching=false`,
+  );
+  assert.equal(
+    calls[2]?.url,
+    `http://orthanc:8042/dicom-web/studies/${STUDY_UID}/series/${SERIES_UID}/instances?includefield=all`,
+  );
+  assert.deepEqual(await study.json(), [
+    {
+      "0020000D": { Value: [STUDY_UID] },
+      "0020000E": { Value: [SERIES_UID] },
+      "00080018": { Value: [SOP_UID] },
+    },
+  ]);
+  assert.deepEqual(await series.json(), [
+    {
+      "0020000D": { Value: [STUDY_UID] },
+      "0020000E": { Value: [SERIES_UID] },
+      "00080018": { Value: [SOP_UID] },
+    },
+  ]);
+  assert.deepEqual(await instances.json(), [
+    {
+      "0020000D": { Value: [STUDY_UID] },
+      "0020000E": { Value: [SERIES_UID] },
+      "00080018": { Value: [SOP_UID] },
+    },
+  ]);
+});
+
 test("denies a nonmember SOP before contacting Orthanc", async () => {
   const { gateway, calls } = fixture();
   const result = await gateway.handle(

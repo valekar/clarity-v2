@@ -60,6 +60,20 @@ export type DeviceAuthRepository = Readonly<{
       fencingToken: string;
     }>,
   ): Promise<boolean>;
+  reportHealth(input: Readonly<{
+    sourceId: string;
+    deviceId: string;
+    sourceGeneration: string;
+    fencingToken: string;
+    sourceReachable: boolean;
+    syncState: "idle" | "syncing" | "attention";
+    lastErrorCode: "orthanc_unavailable" | "low_spool_space" | "source_changed" | "sync_failed" | null;
+    queuedStudies: number;
+    queuedUploads: number;
+    spoolFreeBytes: number | null;
+    spoolCapacityBytes: number | null;
+    lastSuccessfulSyncAt: Date | null;
+  }>): Promise<Date>;
   close(): Promise<void>;
 }>;
 
@@ -285,6 +299,32 @@ function createDeviceRepositoryOperations(
       return result.rows[0].released;
     },
 
+    async reportHealth(input) {
+      const result = await pool.query<{ reported_at: unknown } & QueryResultRow>({
+        text: `SELECT public.record_source_health(
+          $1, $2, $3::bigint, $4::bigint, $5, $6, $7, $8, $9,
+          $10::bigint, $11::bigint, $12
+        ) AS reported_at`,
+        values: [
+          uuid("Source ID", input.sourceId),
+          uuid("Device ID", input.deviceId),
+          requiredText("Source generation", input.sourceGeneration, 20),
+          requiredText("Fencing token", input.fencingToken, 20),
+          input.sourceReachable,
+          input.syncState,
+          input.lastErrorCode,
+          input.queuedStudies,
+          input.queuedUploads,
+          input.spoolFreeBytes,
+          input.spoolCapacityBytes,
+          input.lastSuccessfulSyncAt,
+        ],
+      });
+      const reportedAt = result.rows[0]?.reported_at;
+      if (!(reportedAt instanceof Date)) throw new Error("Health report returned an invalid time.");
+      return reportedAt;
+    },
+
     async close() {
       await pool.end();
     },
@@ -307,6 +347,7 @@ export function createDeviceAuthRepository(pool: Pool): DeviceAuthRepository {
     consumePairing: operations.consumePairing,
     acquireLease: operations.acquireLease,
     releaseLease: operations.releaseLease,
+    reportHealth: operations.reportHealth,
     close: operations.close,
   });
 }

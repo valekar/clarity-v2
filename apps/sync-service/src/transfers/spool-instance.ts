@@ -15,6 +15,8 @@ export interface SpoolOptions {
   maximumObjectBytes: number;
   reserveFreeBytes: number;
   freeBytes?: (directory: string) => Promise<number>;
+  reopenReceived?: boolean;
+  signal?: AbortSignal;
 }
 
 const availableBytes = async (directory: string): Promise<number> => {
@@ -103,6 +105,7 @@ export async function spoolInstance(
   await mkdir(options.directory, { recursive: true, mode: 0o700 });
   const existing = store.uploads.findBySop(sourceKey, instance.sopInstanceUid);
   let superseding = false;
+  let reopeningReceived = false;
   if (existing) {
     if (
       existing.studyInstanceUid !== instance.studyInstanceUid ||
@@ -125,7 +128,11 @@ export async function spoolInstance(
       }
       superseding = true;
     } else {
-      return existing;
+      reopeningReceived =
+        options.reopenReceived === true &&
+        existing.state === "received" &&
+        existing.spoolPath === null;
+      if (!reopeningReceived) return existing;
     }
   }
 
@@ -133,7 +140,7 @@ export async function spoolInstance(
   if ((await freeBytes(options.directory)) <= options.reserveFreeBytes) {
     throw new SpoolCapacityError("Spool volume is below its protected free-space reserve");
   }
-  const response = await orthanc.openInstanceFile(instance.orthancInstanceId);
+  const response = await orthanc.openInstanceFile(instance.orthancInstanceId, options.signal);
   const declared = Number(response.headers.get("content-length"));
   if (Number.isSafeInteger(declared) && declared > options.maximumObjectBytes) {
     await response.body?.cancel();
@@ -198,6 +205,24 @@ export async function spoolInstance(
         byteCount,
         sha256,
       };
+      if (reopeningReceived) {
+        if (existing!.sha256 !== sha256 || existing!.byteCount !== byteCount) {
+          store.uploads.markAttention(
+            existing!.admissionKey,
+            existing!.generation,
+            "Source bytes changed after cloud receipt; review required before re-admission",
+          );
+          throw new SourceBytesChangedError(
+            "Source bytes changed after cloud receipt; upload remains blocked",
+          );
+        }
+        if (options.signal?.aborted) {
+          throw (
+            options.signal.reason ?? new Error("cloud source lease was lost during revalidation")
+          );
+        }
+        return store.uploads.reopenReceivedSpool(spoolRecord);
+      }
       if (superseding) {
         if (
           existing!.studyInstanceUid !== instance.studyInstanceUid ||

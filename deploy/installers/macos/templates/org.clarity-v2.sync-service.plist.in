@@ -5,7 +5,7 @@
   <key>Label</key><string>org.clarity-v2.sync-service</string>
   <key>ProgramArguments</key><array>
     <string>/Library/Application Support/ClarityV2/SyncService/current/runtime/bin/node</string>
-    <string>/Library/Application Support/ClarityV2/SyncService/current/app/main.js</string>
+    <string>/Library/Application Support/ClarityV2/SyncService/current/app/dist/main.js</string>
     <string>--config</string>
     <string>/var/db/clarity-v2/sync-service/config.json</string>
   </array>

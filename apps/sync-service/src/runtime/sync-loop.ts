@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { statfs } from "node:fs/promises";
 import type { InventoryCoordinator } from "../discovery/inventory-coordinator.js";
 import type { OrthancDiscoveryClient } from "../orthanc/discovery-client.js";
 import type { OrthancChangeFeedAdapter } from "../orthanc/change-feed.js";
@@ -6,6 +7,7 @@ import type { CheckpointStore } from "../persistence/checkpoint-store.js";
 import { DiscoveryQueueProcessor } from "../discovery/queue-processor.js";
 import { IngestionClient } from "../transfers/ingestion-client.js";
 import { InstanceUploader } from "../transfers/instance-uploader.js";
+import { recoverReceivedUpload } from "../transfers/received-recovery.js";
 import {
   pruneOrphanedSpools,
   spoolInstance,
@@ -45,8 +47,11 @@ export class SyncLoop {
   #stableGeneration: number | null = null;
   #stableObservedAt: string | null = null;
   #manifestCursor = "";
+  #lastSuccessfulSyncAt: string | null = null;
+  #lastErrorCode: "orthanc_unavailable" | "low_spool_space" | "source_changed" | "sync_failed" | null = null;
   #uploadCursor: string | null = null;
   readonly #admittedStudyObservations = new Map<string, string>();
+  readonly #completedUploads = new Set<string>();
 
   constructor(
     store: CheckpointStore,
@@ -125,6 +130,41 @@ export class SyncLoop {
     }
     await this.#admitDiscoveredBatch();
     if (this.#stableGeneration !== null) await this.#publishStableManifests();
+    this.#lastSuccessfulSyncAt = new Date(now).toISOString();
+    await this.#publishHealth();
+  }
+
+  async #publishHealth(
+    sourceReachable = true,
+    errorCode?: "orthanc_unavailable" | "low_spool_space" | "source_changed" | "sync_failed",
+  ): Promise<void> {
+    if (typeof this.#cloud.reportHealth !== "function") return;
+    const counts = this.#store.getHealthCounts(this.#options.sourceKey);
+    let spoolFreeBytes: number | null = null;
+    let spoolCapacityBytes: number | null = null;
+    try {
+      const filesystem = await statfs(this.#options.spoolDirectory, { bigint: true });
+      const freeBytes = filesystem.bavail * filesystem.bsize;
+      const capacityBytes = filesystem.blocks * filesystem.bsize;
+      if (freeBytes <= BigInt(Number.MAX_SAFE_INTEGER) && capacityBytes <= BigInt(Number.MAX_SAFE_INTEGER)) {
+        spoolFreeBytes = Number(freeBytes);
+        spoolCapacityBytes = Number(capacityBytes);
+      }
+    } catch {
+      // Unknown capacity is represented as null; it must not be reported as zero.
+    }
+    const lowSpace = spoolFreeBytes !== null && spoolFreeBytes <= this.#options.reserveFreeBytes;
+    const lastErrorCode = lowSpace ? "low_spool_space" : (errorCode ?? this.#lastErrorCode);
+    await this.#cloud.reportHealth({
+      sourceReachable,
+      syncState: lastErrorCode ? "attention" : counts.queuedStudies + counts.queuedUploads > 0 ? "syncing" : "idle",
+      lastErrorCode,
+      ...counts,
+      spoolFreeBytes,
+      spoolCapacityBytes,
+      lastSuccessfulSyncAt: this.#lastSuccessfulSyncAt,
+    });
+    this.#lastErrorCode = lowSpace ? "low_spool_space" : null;
   }
 
   async #publishStableManifests(): Promise<void> {
@@ -266,6 +306,12 @@ export class SyncLoop {
         await this.runOnce();
         failures = 0;
       } catch {
+        this.#lastErrorCode = "orthanc_unavailable";
+        try {
+          await this.#publishHealth(false, "orthanc_unavailable");
+        } catch {
+          // A cloud outage prevents recording the source outage; the server marks the prior row stale.
+        }
         failures = Math.min(failures + 1, 7);
         this.#diagnostic("Sync iteration failed; retry scheduled");
       }
@@ -361,7 +407,33 @@ export class SyncLoop {
             },
           );
         }
-        if (upload.state === "received" || upload.state === "needs-attention") continue;
+        if (upload.state === "received") {
+          if (upload.spoolPath !== null) {
+            await this.#uploader.send(upload);
+            continue;
+          }
+          if (upload.uploadId && this.#completedUploads.has(upload.uploadId)) continue;
+          const recovery = await recoverReceivedUpload(
+            upload,
+            checkpoint.generation,
+            instance,
+            this.#orthanc,
+            this.#store,
+            this.#cloud,
+            {
+              directory: this.#options.spoolDirectory,
+              maximumObjectBytes: this.#options.maximumObjectBytes,
+              reserveFreeBytes: this.#options.reserveFreeBytes,
+            },
+          );
+          if (recovery === "pending") continue;
+          if (recovery === "completed") {
+            if (upload.uploadId) this.#completedUploads.add(upload.uploadId);
+            continue;
+          }
+          upload = recovery;
+        }
+        if (upload.state === "needs-attention") continue;
         await this.#uploader.send(upload);
       } catch (error) {
         if (error instanceof StaleUploadGenerationError) {

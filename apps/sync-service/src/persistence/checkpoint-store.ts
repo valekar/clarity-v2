@@ -157,6 +157,25 @@ export class CheckpointStore {
     return mapCheckpoint(row, sourceKey);
   }
 
+  getHealthCounts(sourceKey: string): Readonly<{ queuedStudies: number; queuedUploads: number }> {
+    const result = this.#db.prepare(`
+      SELECT
+        min(1000000, (
+          SELECT count(*) FROM capture_job
+           WHERE source_key = ? AND status != 'complete' AND resource_type = 'Study'
+        ) + (
+          SELECT count(DISTINCT study_uid) FROM local_instance_upload
+           WHERE source_key = ? AND state != 'received'
+        )) AS queued_studies,
+        min(1000000, (SELECT count(*) FROM local_instance_upload
+           WHERE source_key = ? AND state != 'received')) AS queued_uploads
+    `).get(sourceKey, sourceKey, sourceKey) as { queued_studies: number; queued_uploads: number };
+    return Object.freeze({
+      queuedStudies: result.queued_studies,
+      queuedUploads: result.queued_uploads,
+    });
+  }
+
   /**
    * Enqueue a feed page and advance its cursor in one SQLite transaction.
    * A changed Orthanc database identity or a cursor regression starts a local

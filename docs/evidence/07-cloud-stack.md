@@ -15,7 +15,7 @@ proof uses MinIO only as a synthetic S3-compatible emulator; its pinned image is
 not a selected production object store. The [migration job](../../deploy/cloud/Dockerfile.clarity-migrate)
 applied the V2 SQL migrations and the Hanko migration job applied 55 Hanko
 migrations before services started. The latest 23 September application-overlay
-rerun applied Clarity migrations 0001–0012; the migrator observed all twelve
+rerun applied Clarity migrations 0001–0015; the migrator observed all fifteen
 before readiness, DICOMweb, replacement and fresh-volume restore checks passed.
 The proof includes the device-auth role, fenced worker grants, guarded doctor
 directory and ingestion API functions. A prior restore failure from extension-owner comments was
@@ -28,7 +28,11 @@ resolved by restoring without comments; the clean rerun passed.
   migration history, directly update `reports.state`, or create a table in the public schema.
   A separate worker role could execute its fenced import-completion function
   but could not directly update Reports or read staff identities; the web
-  runtime could not execute worker import completion.
+  runtime could not execute worker import completion or the obsolete
+  `reconcile_ingestion_upload_status` shortcut.
+- Web, worker and device-auth roles could not execute dispatch creation or
+  outbox claiming, or read the dispatch outbox. Policy-blocked sharing rows
+  remain inaccessible until a recipient-authentication decision is implemented.
 - Cloud Orthanc reported PostgreSQLIndex, AwsS3Storage and DicomWeb plugins.
   It accepted a generated DICOM instance, returned the same SHA-256 bytes from
   `/instances/{id}/file`, and QIDO-RS returned its exact StudyInstanceUID.
@@ -54,12 +58,33 @@ resolved by restoring without comments; the clean rerun passed.
   [connected ingestion](26-connected-ingestion.md) and
   [viewer](25-viewer-and-sharing-ui.md) evidence for their exact scope.
 
-After that Compose run, the isolated PostgreSQL proof was extended through
-migration 0013. It passed the late-seal Ready transition, same-key concurrent
-admission serialization, and study seal-state response regressions. The worker
-unit proof also covers authorized adoption of an exact same-SOP/same-hash
-Orthanc effect after the prior completion loses its fence. The full Compose
-stack has not yet been rerun against migration 0013.
+The isolated PostgreSQL proof passed through migration 0014: late-seal Ready,
+same-key concurrent admission, study seal-state responses and blocked dispatch
+snapshots/outbox assertions. The worker unit proof covers authorized adoption
+of exact same-SOP/same-hash Orthanc bytes after a prior fence is lost. The
+combined `CLARITY_VIEWER_BROWSER_DIAGNOSTIC=1 CLARITY_COMPILED_SYNC_PROOF=1`
+run then passed with all fourteen migrations. Its separate disposable source
+Orthanc fed the compiled local service, which discovered a fresh synthetic
+Study, uploaded its instance, sealed the manifest and reached cloud Ready;
+cloud Orthanc returned the exact bytes. The service exited cleanly after
+SIGTERM. The 375px Chromium diagnostic loaded the authenticated OHIF iframe
+and top-level route with HTTP 200, though clinical rendering is still open.
+
+After migration 0015 and the late-admission CAS fix,
+`CLARITY_VIEWER_BROWSER_DIAGNOSTIC=1 CLARITY_MULTIPART_RECOVERY_PROOF=1 bash deploy/cloud/scripts/proof.sh`
+exited 0. The fifteen-migration run repeated device-to-Ready ingestion,
+authenticated source-offline viewer routes, the narrow OHIF canvas diagnostic,
+three-part 64 MiB + 1 byte upload recovery after a lost accepted response and
+SQLite reopen, replacement persistence, and fresh-volume PostgreSQL/MinIO
+restore with exact DICOM byte readback. The generated project containers,
+networks and named volumes were removed. A following
+`CLARITY_COMPILED_SYNC_PROOF=1 bash deploy/cloud/scripts/proof.sh` also exited 0
+on the final fifteen-migration schema and updated service entry: a separate
+synthetic Orthanc source was discovered by the compiled service, uploaded,
+sealed, indexed to Ready and read back with matching bytes from cloud Orthanc.
+It stopped after SIGTERM; the backup restore and disposable cleanup passed.
+The [admission cutoff proof](28-manifest-admission-cutoff.md)
+records the isolated reverse-order and double-admission SQL cases.
 
 ## Limits and follow-up
 
@@ -70,7 +95,7 @@ production network isolation design. The separate
 passcode, login, cookie and logout. The initial full-stack run had no explicit session
 issuer/audience; its script now sets both, and the standalone protocol proof
 verified the resulting claims. The full restore sequence also passed after
-that config edit and twelve Clarity migrations. Separate
+that config edit and fifteen Clarity migrations. Separate
 [web](../../deploy/cloud/Dockerfile.web) and
 [worker](../../deploy/cloud/Dockerfile.worker) runtime images then built on
 the pinned Node 22 base from frozen pnpm installs. The web standalone image

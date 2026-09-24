@@ -28,8 +28,6 @@ GRANT SELECT ON public.ingestion_uploads, public.report_files, public.reports,
 ALTER DEFAULT PRIVILEGES FOR ROLE clarity_v2_migrator IN SCHEMA public
   REVOKE SELECT ON TABLES FROM clarity_v2_runtime;
 
-GRANT EXECUTE ON FUNCTION public.reconcile_ingestion_upload_status(uuid, text, text)
-  TO clarity_v2_runtime;
 GRANT EXECUTE ON FUNCTION public.enroll_pending_hanko_identity(uuid, uuid, text, text, text)
   TO clarity_v2_runtime;
 GRANT EXECUTE ON FUNCTION public.is_effective_staff_admin(uuid)

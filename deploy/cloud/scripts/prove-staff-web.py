@@ -123,11 +123,24 @@ def prove_viewer(web_origin: str, cookie: str, fixture_path: str) -> None:
         instances = json.loads(metadata_body)
     except json.JSONDecodeError as exc:
         raise ProofError("Instance metadata was not valid DICOM JSON.") from exc
-    if not isinstance(instances, list) or len(instances) != 1:
+    late = fixture.get("lateArrival")
+    expected_sops = {sop_uid}
+    if isinstance(late, dict):
+        late_sop = late.get("sopInstanceUid")
+        if not isinstance(late_sop, str) or not late_sop or late_sop == sop_uid:
+            raise ProofError("Late-arrival fixture has no distinct SOP Instance UID.")
+        if late.get("resealedRevision") != 2:
+            raise ProofError("Late-arrival fixture did not reach revision 2.")
+        expected_sops.add(late_sop)
+    if not isinstance(instances, list) or len(instances) != len(expected_sops):
         raise ProofError("Instance QIDO exposed a non-exact manifest membership set.")
-    item = instances[0]
-    if not isinstance(item, dict) or item.get("00080018", {}).get("Value", [None])[0] != sop_uid:
-        raise ProofError("Instance QIDO returned an unexpected SOP Instance UID.")
+    returned_sops = {
+        item.get("00080018", {}).get("Value", [None])[0]
+        for item in instances if isinstance(item, dict)
+    }
+    if returned_sops != expected_sops:
+        raise ProofError("Instance QIDO returned a non-exact SOP Instance UID set.")
+    item = next(item for item in instances if item["00080018"]["Value"][0] == sop_uid)
     pixel = item.get("7FE00010", {})
     if isinstance(pixel, dict) and isinstance(pixel.get("BulkDataURI"), str):
         bulk_uri = pixel["BulkDataURI"]
@@ -141,15 +154,16 @@ def prove_viewer(web_origin: str, cookie: str, fixture_path: str) -> None:
         if not bulk_body or "no-store" not in bulk_headers.get("cache-control", ""):
             raise ProofError("Bulk-data response was empty or cacheable.")
 
-    instance_path = (
-        f"/dicom-web/studies/{study_uid}/series/{series_uid}/instances/{sop_uid}"
-    )
-    status, instance_headers, instance_body = request_bytes(
-        web_origin, instance_path, cookie, 'multipart/related; type="application/dicom"'
-    )
-    expect_status(status, 200, "Authenticated WADO instance read")
-    if not instance_body or "no-store" not in instance_headers.get("cache-control", ""):
-        raise ProofError("WADO response was empty or cacheable.")
+    for expected_sop in expected_sops:
+        instance_path = (
+            f"/dicom-web/studies/{study_uid}/series/{series_uid}/instances/{expected_sop}"
+        )
+        status, instance_headers, instance_body = request_bytes(
+            web_origin, instance_path, cookie, 'multipart/related; type="application/dicom"'
+        )
+        expect_status(status, 200, "Authenticated WADO instance read")
+        if not instance_body or "no-store" not in instance_headers.get("cache-control", ""):
+            raise ProofError("WADO response was empty or cacheable.")
 
     unrelated_uid = "1.2.826.0.1.3680043.10.987.999"
     status, _, _ = request_bytes(

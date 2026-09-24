@@ -18,7 +18,7 @@ test("manifest attempts and page progress recover after process reopen", async (
       cloudGeneration: 7,
       expectedReportVersion: 4,
       digest: "a".repeat(64),
-      observedAt: "2026-09-23T12:00:00.000Z",
+      observedAt: new Date().toISOString(),
     };
     const attempt = store.manifests.startAttempt(input);
     assert.ok(attempt.attemptId);

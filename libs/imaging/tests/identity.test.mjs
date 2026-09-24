@@ -1,4 +1,9 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { InvalidDicomError, readDicomIdentity } from "../dist/index.js";
 
@@ -53,6 +58,46 @@ function part10({ modality, sopClass, transferSyntax = "1.2.840.10008.1.2.1", me
 function stream(bytes) {
   return new Response(bytes).body;
 }
+
+function hasTag(bytes, group, number) {
+  const tag = Buffer.from([group & 0xff, group >> 8, number & 0xff, number >> 8]);
+  return Buffer.from(bytes).includes(tag);
+}
+
+test("generated synthetic viewer fixtures have bounded identities and expected object classes", async (t) => {
+  const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+  const generator = resolve(root, "deploy/cloud/scripts/make-synthetic-dicom.py");
+  const directory = mkdtempSync(resolve(tmpdir(), "clarity-viewer-fixtures-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const expected = [
+    { profile: "ct", modality: "CT", sopClass: "1.2.840.10008.5.1.4.1.1.2", pixels: true },
+    { profile: "mr", modality: "MR", sopClass: "1.2.840.10008.5.1.4.1.1.4", pixels: true },
+    { profile: "sr", modality: "SR", sopClass: "1.2.840.10008.5.1.4.1.1.88.11", pixels: false },
+    { profile: "pdf", modality: "DOC", sopClass: "1.2.840.10008.5.1.4.1.1.104.1", pixels: false },
+  ];
+  for (const [index, fixture] of expected.entries()) {
+    await t.test(fixture.profile, async () => {
+      const path = resolve(directory, `${fixture.profile}.dcm`);
+      execFileSync("python3", [generator, path, String(index + 31), "2", fixture.profile]);
+      const bytes = readFileSync(path);
+      const identity = await readDicomIdentity(stream(bytes));
+      assert.equal(identity.studyInstanceUid, `1.2.826.0.1.3680043.10.987.${index + 31}`);
+      assert.equal(identity.seriesInstanceUid, `${identity.studyInstanceUid}.1`);
+      assert.equal(identity.sopInstanceUid, `${identity.seriesInstanceUid}.2`);
+      assert.ok(bytes.includes(Buffer.from(fixture.modality)));
+      assert.ok(bytes.includes(Buffer.from(fixture.sopClass)));
+      assert.equal(hasTag(bytes, 0x7fe0, 0x0010), fixture.pixels);
+      if (fixture.profile === "sr") {
+        assert.ok(bytes.includes(Buffer.from("Synthetic finding only")));
+        assert.ok(hasTag(bytes, 0x0040, 0xa730));
+      }
+      if (fixture.profile === "pdf") {
+        assert.ok(bytes.includes(Buffer.from("application/pdf")));
+        assert.ok(bytes.includes(Buffer.from("%PDF-1.4")));
+      }
+    });
+  }
+});
 
 test("reads synthetic CT, MR and SR identity headers", async (t) => {
   const fixtures = [

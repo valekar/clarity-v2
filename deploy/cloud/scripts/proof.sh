@@ -14,12 +14,19 @@ viewer_proof="${CLARITY_VIEWER_PROOF:-0}"
 viewer_browser_diagnostic="${CLARITY_VIEWER_BROWSER_DIAGNOSTIC:-0}"
 viewer_browser_hold="${CLARITY_VIEWER_BROWSER_HOLD_SECONDS:-0}"
 compiled_sync_proof="${CLARITY_COMPILED_SYNC_PROOF:-0}"
+multipart_recovery_proof="${CLARITY_MULTIPART_RECOVERY_PROOF:-0}"
 if [[ "$viewer_proof" == 1 || "$viewer_browser_diagnostic" == 1 ]]; then
   viewer_proof=1
   app_proof=1
   connected_proof=1
 fi
+if [[ "$connected_proof" == 1 ]]; then
+  app_proof=1
+fi
 if [[ "$compiled_sync_proof" == 1 ]]; then
+  app_proof=1
+fi
+if [[ "$multipart_recovery_proof" == 1 ]]; then
   app_proof=1
 fi
 port() { python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()'; }
@@ -321,6 +328,11 @@ if [[ "$runtime_worker_execute" != f || "$worker_execute" != t ]]; then
   echo "Worker import privilege is not isolated from web runtime: runtime=$runtime_worker_execute worker=$worker_execute" >&2
   exit 1
 fi
+runtime_upload_reconcile_execute="$(compose "$project" exec --no-TTY postgres psql -X --tuples-only --no-align --set ON_ERROR_STOP=1 -U clarity_v2_runtime -d clarity_v2_app --command "SELECT has_function_privilege(current_user, 'public.reconcile_ingestion_upload_status(uuid,text,text)', 'EXECUTE');")"
+if [[ "$runtime_upload_reconcile_execute" != f ]]; then
+  echo 'Clarity runtime role unexpectedly has upload completion reconciliation permission.' >&2
+  exit 1
+fi
 if compose "$project" exec --no-TTY postgres psql -X --set ON_ERROR_STOP=1 -U clarity_v2_worker -d clarity_v2_app --command "UPDATE reports SET state = 'ready';" >/dev/null 2>&1; then
   echo 'Clarity worker role unexpectedly has direct Report write permission.' >&2
   exit 1
@@ -342,7 +354,7 @@ fi
 for role in clarity_v2_runtime clarity_v2_worker clarity_v2_device_auth_login; do
   dispatch_access="$(compose "$project" exec --no-TTY postgres psql -X --tuples-only --no-align --set ON_ERROR_STOP=1 \
     -U "$role" -d clarity_v2_app --command "SELECT has_function_privilege(current_user, 'public.create_share_dispatch(uuid,uuid,uuid,bigint,integer,uuid,boolean,text,boolean,uuid,bigint)', 'EXECUTE')::text || '|' || has_function_privilege(current_user, 'public.claim_dispatch_outbox(uuid,integer)', 'EXECUTE')::text || '|' || has_table_privilege(current_user, 'public.dispatch_outbox', 'SELECT')::text;")"
-  if [[ "$dispatch_access" != 'f|f|f' ]]; then
+  if [[ "$dispatch_access" != 'false|false|false' ]]; then
     echo "Recipient-policy gate unexpectedly exposes dispatch to $role: $dispatch_access" >&2
     exit 1
   fi
@@ -476,6 +488,17 @@ if [[ "$viewer_browser_diagnostic" == 1 ]]; then
   python3 "$cloud_dir/scripts/prove-ohif-browser.py" \
     "http://localhost:$web_port" "$proof_dir/viewer-admin.json" \
     "$proof_dir/connected-ingestion.json"
+fi
+
+if [[ "$multipart_recovery_proof" == 1 ]]; then
+  CLARITY_PROOF_PROJECT="$project" \
+  CLARITY_PROOF_ENV_FILE="$env_file" \
+  CLARITY_WEB_URL="http://127.0.0.1:$web_port" \
+  CLARITY_PROOF_RESULT_FILE="$proof_dir/multipart-recovery.json" \
+  INTAKE_S3_PUBLIC_ENDPOINT="$INTAKE_S3_PUBLIC_ENDPOINT" \
+  INTAKE_UPLOAD_PASSWORD="$INTAKE_UPLOAD_PASSWORD" \
+    node "$cloud_dir/scripts/prove-multipart-recovery.mjs"
+  echo "Connected multipart recovery proof passed; synthetic result: $proof_dir/multipart-recovery.json"
 fi
 
 if [[ "$compiled_sync_proof" == 1 ]]; then

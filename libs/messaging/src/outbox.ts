@@ -32,8 +32,7 @@ export type OutboxTransitionError =
   | "invalid_input";
 
 export type OutboxTransition<T> =
-  | Readonly<{ ok: true; value: T }>
-  | Readonly<{ ok: false; reason: OutboxTransitionError }>;
+  Readonly<{ ok: true; value: T }> | Readonly<{ ok: false; reason: OutboxTransitionError }>;
 
 export type ProviderReceipt = Readonly<{
   providerMessageId: string;
@@ -68,10 +67,7 @@ function validIntent(intent: OutboxIntent): boolean {
   );
 }
 
-function clone(
-  intent: OutboxIntent,
-  change: Partial<OutboxIntent>,
-): OutboxIntent {
+function clone(intent: OutboxIntent, change: Partial<OutboxIntent>): OutboxIntent {
   return Object.freeze({ ...intent, ...change, version: intent.version + 1 });
 }
 
@@ -85,7 +81,12 @@ export function claimQueuedIntent(
   now: string,
   claimExpiresAt: string,
 ): OutboxTransition<OutboxIntent> {
-  if (!validIntent(intent) || !uuidLike.test(claimToken) || !isoTimestamp.test(now) || !isoTimestamp.test(claimExpiresAt)) {
+  if (
+    !validIntent(intent) ||
+    !uuidLike.test(claimToken) ||
+    !isoTimestamp.test(now) ||
+    !isoTimestamp.test(claimExpiresAt)
+  ) {
     return { ok: false, reason: "invalid_input" };
   }
   if (intent.state !== "queued" || intent.attempt !== 0 || intent.claimToken !== null) {
@@ -188,7 +189,8 @@ export function applyProviderCallback(
   ) {
     return { ok: false, reason: "invalid_input" };
   }
-  if (callback.idempotencyKey !== intent.idempotencyKey) return { ok: false, reason: "claim_mismatch" };
+  if (callback.idempotencyKey !== intent.idempotencyKey)
+    return { ok: false, reason: "claim_mismatch" };
   if (intent.providerMessageId !== callback.providerMessageId) {
     return { ok: false, reason: "provider_message_mismatch" };
   }

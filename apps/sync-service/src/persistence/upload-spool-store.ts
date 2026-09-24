@@ -186,6 +186,47 @@ export class UploadSpoolStore {
     return save();
   }
 
+  reopenReceivedSpool(
+    upload: Omit<LocalUpload, "state" | "uploadId" | "expiresAt" | "attentionReason">,
+  ): LocalUpload {
+    const reopen = this.db.transaction(() => {
+      this.#assertGeneration(upload.sourceKey, upload.generation);
+      const existing = this.db
+        .prepare("SELECT * FROM local_instance_upload WHERE source_key = ? AND sop_uid = ?")
+        .get(upload.sourceKey, upload.sopInstanceUid) as UploadRow | undefined;
+      if (!existing || existing.state !== "received" || existing.spool_path !== null) {
+        throw new Error("received upload is no longer eligible for source revalidation");
+      }
+      if (
+        existing.admission_key !== upload.admissionKey ||
+        existing.generation !== upload.generation ||
+        existing.study_uid !== upload.studyInstanceUid ||
+        existing.series_uid !== upload.seriesInstanceUid ||
+        existing.byte_count !== upload.byteCount ||
+        existing.sha256 !== upload.sha256
+      ) {
+        throw new Error("source identity or bytes changed since the received upload");
+      }
+      this.db
+        .prepare("DELETE FROM local_upload_part WHERE admission_key = ?")
+        .run(existing.admission_key);
+      this.db
+        .prepare(
+          `UPDATE local_instance_upload SET orthanc_instance_id = ?, spool_path = ?,
+             state = 'spooled', upload_id = NULL, expires_at = NULL, attention_reason = NULL,
+             updated_at = ? WHERE admission_key = ? AND state = 'received' AND spool_path IS NULL`,
+        )
+        .run(
+          upload.orthancInstanceId,
+          upload.spoolPath,
+          new Date().toISOString(),
+          existing.admission_key,
+        );
+      return this.get(existing.admission_key)!;
+    });
+    return reopen();
+  }
+
   markGenerationConflict(admissionKey: string, reason: string): void {
     this.db
       .prepare(

@@ -11,7 +11,9 @@ case "$version" in
 esac
 [ -d "$release_dir" ] || { /usr/bin/printf '%s\n' 'release directory is missing' >&2; exit 66; }
 [ -x "$release_dir/runtime/bin/node" ] || { /usr/bin/printf '%s\n' 'bundled Node executable is missing' >&2; exit 66; }
-[ -f "$release_dir/app/main.js" ] || { /usr/bin/printf '%s\n' 'compiled service entry is missing' >&2; exit 66; }
+[ -f "$release_dir/app/dist/main.js" ] || { /usr/bin/printf '%s\n' 'compiled service entry is missing' >&2; exit 66; }
+[ -f "$release_dir/app/package.json" ] || { /usr/bin/printf '%s\n' 'service package manifest is missing' >&2; exit 66; }
+[ -d "$release_dir/app/node_modules/@clarity/contracts/dist" ] || { /usr/bin/printf '%s\n' 'compiled workspace dependencies are missing' >&2; exit 66; }
 node_version=$("$release_dir/runtime/bin/node" --version)
 [ "$node_version" = v22.20.0 ] || { /usr/bin/printf '%s\n' 'release must bundle Node v22.20.0' >&2; exit 65; }
 if [ -n "${CLARITY_MACOS_INSTALLER_IDENTITY:-}" ] || [ "${CLARITY_REQUIRE_CODESIGN:-0}" = 1 ]; then

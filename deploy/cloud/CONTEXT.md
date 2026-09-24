@@ -24,16 +24,22 @@ and Playwright to prove browser cookie storage and protected-route use across
 localhost ports; it does not prove Hanko Elements screens, packaged Electron or
 production HTTPS domains. Preserve all V1 cloud resources.
 
-The 23 September rerun passed with seven application migrations, restricted
-web/worker roles, source-independent Hanko and Orthanc databases, container
+The 23 September connected runs passed with fifteen application migrations, restricted
+web/worker/device roles, source-independent Hanko and Orthanc databases, container
 replacement, and backup restore into fresh volumes. The separate intake policies
 under `minio/` scope the synthetic web uploader and worker to `intake/*` objects;
 they do not establish a maintained production object store. The
 `compose.application.yaml` overlay now defines container wiring for the web,
 worker and separate intake users; `docker compose config --quiet` passed with
 synthetic values. `CLARITY_APP_PROOF=1 bash deploy/cloud/scripts/proof.sh` is
-the optional container build/liveness and scoped-intake gate. That wiring has
-not yet passed a connected application proof.
+the optional container build/liveness and scoped-intake gate. Later
+`CLARITY_CONNECTED_PROOF=1`, `CLARITY_COMPILED_SYNC_PROOF=1` and
+`CLARITY_VIEWER_PROOF=1` runs passed bounded synthetic ingestion and staff
+routes; see [connected evidence](../../docs/evidence/26-connected-ingestion.md)
+and [viewer evidence](../../docs/evidence/25-viewer-and-sharing-ui.md). A new
+2026-09-24 combined viewer/compiled rerun stopped before startup because Docker
+BuildKit could not write its metadata database. These proofs do not establish a
+production cloud topology or installed centre service.
 
 `Dockerfile.web` and `Dockerfile.worker` build isolated Node 22 runtime images
 from a frozen pnpm workspace install. The web image takes its public Hanko URL

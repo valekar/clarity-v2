@@ -36,10 +36,11 @@ test("pkgbuild creates a disposable package from a standalone release fixture", 
     const release = join(root, "release");
     const nodePath = join(release, "runtime/bin/node");
     await mkdir(join(release, "runtime/bin"), { recursive: true });
-    await mkdir(join(release, "app"), { recursive: true });
+    await mkdir(join(release, "app/dist"), { recursive: true });
+    await mkdir(join(release, "app/node_modules/@clarity/contracts/dist"), { recursive: true });
     await writeFile(nodePath, '#!/bin/sh\nprintf "%s\\n" v22.20.0\n');
     await chmod(nodePath, 0o755);
-    await writeFile(join(release, "app/main.js"), "process.exitCode = 78;\n");
+    await writeFile(join(release, "app/dist/main.js"), "process.exitCode = 78;\n");
     await writeFile(join(release, "app/package.json"), '{"type":"module"}\n');
     const output = join(root, "ClaritySync-0.1.0.pkg");
     assert.equal(run(build, ["../0.1.0", release, output]).status, 64);
@@ -55,7 +56,7 @@ test("pkgbuild creates a disposable package from a standalone release fixture", 
       files.stdout,
       /Library\/LaunchDaemons\/org\.clarity-v2\.sync-service\.plist$/,
     );
-    assert.match(files.stdout, /SyncService\/releases\/0\.1\.0\/app\/main\.js/);
+    assert.match(files.stdout, /SyncService\/releases\/0\.1\.0\/app\/dist\/main\.js/);
     assert.match(files.stdout, /SyncService\/installer\/uninstall-preserve-data\.sh/);
   } finally {
     await rm(root, { recursive: true, force: true });

@@ -65,6 +65,17 @@ export interface CloudLeaseHeartbeat {
   stop(): void;
 }
 
+export type SourceHealthReport = Readonly<{
+  sourceReachable: boolean;
+  syncState: "idle" | "syncing" | "attention";
+  lastErrorCode: "orthanc_unavailable" | "low_spool_space" | "source_changed" | "sync_failed" | null;
+  queuedStudies: number;
+  queuedUploads: number;
+  spoolFreeBytes: number | null;
+  spoolCapacityBytes: number | null;
+  lastSuccessfulSyncAt: string | null;
+}>;
+
 async function boundedJson(response: Response, maximumBytes = 256 * 1024): Promise<unknown> {
   const declared = Number(response.headers.get("content-length"));
   if (Number.isFinite(declared) && declared > maximumBytes) {
@@ -290,6 +301,19 @@ export class IngestionClient {
       return this.renewLease();
     }
     return this.#lease;
+  }
+
+  async reportHealth(report: SourceHealthReport): Promise<void> {
+    const lease = await this.ensureLease();
+    await this.#api("/api/ingestion/health", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        sourceGeneration: lease.sourceGeneration,
+        fencingToken: lease.fencingToken,
+        ...report,
+      }),
+    });
   }
 
   async startLeaseHeartbeat(

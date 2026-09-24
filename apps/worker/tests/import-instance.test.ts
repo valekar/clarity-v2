@@ -131,12 +131,15 @@ class MemoryRepository implements WorkerRepository {
     return this.completed && !this.cleaned ? [upload] : [];
   }
   async authorizeImport(_upload: ReceivedUpload): Promise<boolean> {
+    void _upload;
     return this.authorized;
   }
   async assertUidOwnership(): Promise<boolean> {
     return true;
   }
   async completeIndexed(_upload: ReceivedUpload, _instanceId: string): Promise<void> {
+    void _upload;
+    void _instanceId;
     this.completed = true;
     if (this.loseFirstReply) {
       this.loseFirstReply = false;
@@ -226,21 +229,39 @@ test("a new authorized owner adopts an exact stale Orthanc effect without a seco
       ...upload,
       uploadId: "60000000-0000-4000-8000-000000000002",
     };
-    state.repository.authorizeImport = async (candidate) =>
-      candidate.uploadId === upload.uploadId || candidate.uploadId === replacement.uploadId;
+    let authorizedUploadId = upload.uploadId;
+    let authorizationCount = 0;
+    state.repository.authorizeImport = async (candidate) => {
+      authorizationCount += 1;
+      return candidate.uploadId === authorizedUploadId;
+    };
     state.repository.completeIndexed = async (candidate) => {
       if (candidate.uploadId === upload.uploadId) throw new Error("fence superseded at commit");
       state.repository.completed = true;
     };
+    const oldProgress = state.dependencies.onProgress;
+    state.dependencies = {
+      ...state.dependencies,
+      onProgress: (event) => {
+        oldProgress?.(event);
+        if (event === "fence-rechecked") {
+          // Model takeover after the successful pre-POST authorization query
+          // returned, in the unavoidable DB-to-Orthanc effect gap.
+          authorizedUploadId = replacement.uploadId;
+        }
+      },
+    };
     await assert.rejects(processReceivedUpload(upload, state.dependencies), /fence superseded/);
+    assert.equal(authorizationCount, 2);
     assert.equal(state.index.imports, 1);
     assert.equal(state.repository.completed, false);
+    assert.deepEqual(state.index.indexed, bytes);
+    assert.equal(state.intake.removed, 0, "stale completion retains intake for reconciliation");
 
-    state.repository.authorizeImport = async (candidate) =>
-      candidate.uploadId === replacement.uploadId;
     await processReceivedUpload(replacement, state.dependencies);
     assert.equal(state.index.imports, 1);
     assert.equal(state.repository.completed, true);
+    assert.equal(state.intake.removed, 1);
   });
 
   await t.test("same SOP with a conflicting digest", async () => {

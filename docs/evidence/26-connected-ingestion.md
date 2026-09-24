@@ -22,7 +22,8 @@ without changing its generation left the Ready Report available as an offline
 snapshot.
 
 The end-to-end path and authenticated staff-viewer helper passed in the full
-disposable cloud run. The helper checked Study/instance QIDO, WADO and bulk data,
+disposable cloud run, then again with migrations 0013–0015 applied. The helper
+checked Study/instance QIDO, WADO and bulk data,
 an unrelated UID denial, OHIF response, disabled membership denial and Hanko
 logout denial against the worker-created Report after source disable. An earlier
 run exposed an optional-argument unpacking defect in the helper; staff fixed it
@@ -30,40 +31,80 @@ before the passing combined rerun. The cloud proof then replaced Orthanc and
 PostgreSQL containers, restored database and object backups into fresh volumes,
 and verified matching synthetic DICOM bytes after restore.
 
-This proves one synthetic object and the connected route/worker path. It does
-not prove large/multipart transfer through the web routes, centre-local sync
-service activation, full crash-kill/restart during this same end-to-end path,
+The later opt-in compiled-service harness created a separate localhost-only
+synthetic Orthanc source with a fresh Study/Series/SOP UID triplet, paired a
+device, and started the compiled `apps/sync-service/dist/main.js` entry. The
+service discovered that source, uploaded and sealed without manual intake, and
+the web/worker stack reached `ready|sealed|completed`. Cloud Orthanc readback
+matched the source byte count and SHA-256. The child stopped cleanly after
+SIGTERM; its isolated source container/network and local spool were removed.
+
+The latest 0015 rerun, `CLARITY_COMPILED_SYNC_PROOF=1 bash
+deploy/cloud/scripts/proof.sh`, exited 0. It repeated separate synthetic
+Orthanc discovery through the compiled service to cloud Ready, verified UID and
+SHA-256 byte readback, SIGTERM exit and fresh-volume PostgreSQL/MinIO backup
+restore, then removed disposable containers, networks and named volumes. Log:
+`/tmp/clarity-v2-cloud-0015-compiled-final.log`.
+
+The opt-in multipart recovery run then exercised the local `InstanceUploader`
+and SQLite spool against the same disposable APIs/MinIO. For a 67,108,865-byte
+synthetic opaque payload it confirmed a validly signed expired part URL was
+rejected, MinIO accepted part 1 before the response was deliberately lost, and
+no local part receipt existed before SQLite reopen. The client reopened the
+same database, kept the same cloud upload ID, resent the part and completed
+three parts. The completion route verified the stored object size and SHA-256;
+the upload status was `received`. The payload was opaque synthetic data, not a
+parseable DICOM object. The multipart assertions stop at verified intake status;
+worker outcome is outside this fixture's acceptance.
+
+This proves one-object connected route/worker flow and one separate-source
+compiled-service activation. It does not prove large/multipart transfer through
+the web routes, full crash-kill/restart during this same end-to-end path,
 atomicity across PostgreSQL and Orthanc, late-instance inventory reopening,
 quiet-but-incomplete inventory detection, CT/MR codec breadth, clinical
 validation, production provider policy or centre capacity. Component crash
 recovery is separately covered by the [worker process proof](15-worker-foundation.md);
 manifest database invariants are in [manifest persistence](18-manifest-persistence.md).
 
-The import authorization check and completion CAS prevent a stale fence from
-starting or committing worker work. PostgreSQL and Orthanc do not share a
-transaction: if a fence changes during an Orthanc POST, the database refuses
-Ready completion and the resulting provider object requires reconciliation.
+The pre-POST authorization check rejects a fence that is already stale when
+checked. A later fence change can still allow the Orthanc POST to occur, while
+the database completion CAS denies Ready completion; the resulting provider
+object then requires reconciliation. PostgreSQL and Orthanc do not share a
+transaction.
 
 ## Verification
 
-- `pnpm --filter @clarity/database proof` passed through migrations 0001–0013,
+- `pnpm --filter @clarity/database proof` passed through migrations 0001–0015,
   including direct SQL null/fence checks, manifest attempt/CAS checks, upload
   idempotency, UID reservation and role isolation. The 0013 regressions proved
   that a pre-indexed file can reach Ready when its manifest seals later, two
   concurrent same-key admissions return one durable upload ID, and study
   admission returns the sealed revision, digest and generation for reconciliation.
+  The 0014 transaction proof verified immutable recipient snapshots,
+  idempotency, stale-version rejection and policy-blocked outbox rows.
 - `pnpm --filter @clarity/worker test` passed 20 assertions for staging,
   byte/UID validation, uncertain and stale Orthanc effects, fence recheck before
   POST, restart cleanup, bounded header parsing and request deadlines. A new
-  authorized upload adopted an exact same-SOP/same-hash stale Orthanc effect
-  without a second POST; a conflicting digest was quarantined.
+  test changes the active fence after the worker's successful pre-POST check
+  returns but before the Orthanc adapter is called. The stale POST is denied at
+  database completion and retains intake; a newly authorized same-SOP/same-hash
+  upload adopts the exact indexed bytes without a second POST. A conflicting
+  digest is quarantined.
 - `pnpm --filter @clarity/imaging build`, `pnpm --filter @clarity/worker build`,
   `pnpm --filter @clarity/worker typecheck`, the 20 worker assertions and 7 imaging
   subtests passed after extracting the parser to `@clarity/imaging`. The
   compiled imaging export also passed import from an external temporary
   directory with `pnpm run check:compiled-node`.
-- `CLARITY_VIEWER_PROOF=1 bash deploy/cloud/scripts/proof.sh` passed the connected
-  path, authenticated viewer checks, replacement and fresh-volume restore.
+- `CLARITY_COMPILED_SYNC_PROOF=1 bash deploy/cloud/scripts/proof.sh` passed the
+  fifteen-migration connected path, separate-source compiled service activation,
+  UID/SHA-256 readback, graceful stop and fresh-volume restore.
+- `CLARITY_VIEWER_BROWSER_DIAGNOSTIC=1 CLARITY_MULTIPART_RECOVERY_PROOF=1 bash
+deploy/cloud/scripts/proof.sh` passed the combined viewer/multipart rerun.
+  Multipart result: 67,108,865 bytes, 3 parts, expired URL rejected, successful
+  provider response dropped after accepting part 1, no local receipt before
+  SQLite reopen, same upload recovered, and final status `received` with 3
+  durable local part receipts. The proof project cleaned its containers and
+  volumes on exit.
 - `pnpm --filter @clarity/contracts test`, `pnpm --filter @clarity/database build`,
   `pnpm --filter @clarity/web typecheck`, `pnpm --filter @clarity/imaging test`,
   and `pnpm run check:source-policy` passed after the 0013 changes. The 7 imaging

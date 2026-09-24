@@ -9,6 +9,8 @@ after acceptance, reconciles the accepted receipt, then confirms that a repeat
 send is idempotent. `pnpm --filter @clarity/messaging test` passed 1/1; the
 workspace source-policy check also passed.
 
-This is only the provider boundary test double. Database outbox/attempts,
-bounded worker retry, approved real provider, signed callbacks, recipient
-verification and any real message delivery remain open under P6.1–P6.4.
+This is only the provider boundary test double. The policy-gated durable outbox
+schema and callback state contract were added later; see [evidence 27](27-policy-gated-dispatch-outbox.md).
+Outbox authorization, recipient verification, a scheduled delivery worker,
+approved real provider, production callback endpoint/secret management and any
+real message delivery remain open under P6.1–P6.4.

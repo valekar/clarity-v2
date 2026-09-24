@@ -5,6 +5,8 @@ import { getStaffServices } from "../../../../server/staff-services";
 import { LogoutButton } from "../../../sign-in/LogoutButton";
 import { StaffNavigation } from "../../StaffNavigation";
 import styles from "../../study-dashboard.module.css";
+import { StudyViewerFrame } from "../StudyViewerFrame";
+import { ViewerCompatibilityNotice } from "../ViewerCompatibilityNotice";
 
 export const dynamic = "force-dynamic";
 
@@ -84,11 +86,9 @@ export default async function StudyViewerPage({
         </div>
       </header>
       <StaffNavigation current="studies" />
-      <p className={styles.muted}>
-        The viewer reads the verified cloud copy. Unsupported transfer syntaxes or non-image DICOM
-        objects may not display here.
-      </p>
-      <iframe className={styles.viewerFrame} src={viewerUrl} title="DICOM study viewer" />
+      <p className={styles.muted}>The viewer reads the verified cloud copy.</p>
+      <ViewerCompatibilityNotice studyUid={study.studyInstanceUid} />
+      <StudyViewerFrame src={viewerUrl} />
     </main>
   );
 }

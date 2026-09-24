@@ -8,7 +8,7 @@ permissions:
   contents: read
 
 jobs:
-  validate-inert-package:
+  validate-synthetic-package:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,14 +22,13 @@ jobs:
         with:
           node-version: 22.20.0
           cache: pnpm
-      - name: Verify inert service configuration and pinned wrapper
+      - run: pnpm install --frozen-lockfile
+      - name: Assemble and smoke launch the compiled Windows release
         shell: pwsh
         run: |
-          $lock = Get-Content deploy/windows/WinSW.lock.json | ConvertFrom-Json
-          Invoke-WebRequest -Uri $lock.url -OutFile "$env:RUNNER_TEMP/WinSW-x64.exe"
-          $actual = (Get-FileHash "$env:RUNNER_TEMP/WinSW-x64.exe" -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($actual -ne $lock.sha256) { throw "WinSW checksum mismatch" }
-          $env:WINSW_LOCAL_ARTIFACT = "$env:RUNNER_TEMP/WinSW-x64.exe"
-          python -m unittest discover -s deploy/windows -p "test_*.py" -v
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @clarity/sync-service build
+          $release = Join-Path $env:RUNNER_TEMP 'clarity-sync-release'
+          ./deploy/windows/build-release.ps1 -Version '0.1.0-ci' -OutputDirectory $release
+          "CLARITY_RELEASE_DIR=$release" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "WINSW_LOCAL_ARTIFACT=$(Join-Path $release 'ClaritySyncService.exe')" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Verify service XML and compiled release contract
+        run: python -m unittest discover -s deploy/windows -p "test_*.py" -v

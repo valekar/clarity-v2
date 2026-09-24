@@ -178,7 +178,7 @@ if [[ "$audit_after" != "$audit_before" ]]; then
   exit 1
 fi
 
-if psql --no-psqlrc --set ON_ERROR_STOP=1 --command "SET ROLE clarity_v2_migrator; UPDATE staff_access_audit SET new_values = '{}'::jsonb WHERE id = 1;" >"$log_one" 2>&1; then
+if psql --no-psqlrc --set ON_ERROR_STOP=1 --command "SET ROLE clarity_v2_migrator; UPDATE staff_access_audit SET new_values = '{}'::jsonb WHERE id = (SELECT min(id) FROM staff_access_audit);" >"$log_one" 2>&1; then
   echo 'Append-only audit trigger accepted UPDATE under migration role.' >&2
   exit 1
 fi

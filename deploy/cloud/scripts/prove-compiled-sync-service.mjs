@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
+import { createRequire } from "node:module";
 import { setTimeout as delay } from "node:timers/promises";
 
 const root = resolve(new URL("../../..", import.meta.url).pathname);
@@ -47,6 +49,8 @@ const sourceAuthorization = `Basic ${Buffer.from(`proof:${sourceOrthancPassword}
 const stateDirectory = join(temp, "state");
 const spoolDirectory = join(temp, "spool");
 const databasePath = join(stateDirectory, "sync.sqlite");
+const serviceRequire = createRequire(join(root, "apps/sync-service/package.json"));
+const Database = serviceRequire("better-sqlite3");
 let child;
 let stopping;
 let childError;
@@ -247,10 +251,12 @@ async function uploadSyntheticToSource(dicom) {
   return value.ID;
 }
 
-function launchService(deviceAuthorization) {
-  checked(pnpm, ["exec", "turbo", "run", "build", "--filter=@clarity/sync-service..."], {
-    timeout: 120_000,
-  });
+function launchService(deviceAuthorization, build = true) {
+  if (build) {
+    checked(pnpm, ["exec", "turbo", "run", "build", "--filter=@clarity/sync-service..."], {
+      timeout: 120_000,
+    });
+  }
   child = spawn(process.execPath, [join(root, "apps/sync-service/dist/main.js")], {
     cwd: root,
     env: {
@@ -297,6 +303,85 @@ async function waitForReady(studyInstanceUid, processHandle) {
   throw new Error(
     `Cloud did not reach ready|sealed|completed within 180 seconds (last state: ${state || "none"}).`,
   );
+}
+
+function localUploadState(sopInstanceUid) {
+  if (!existsSync(databasePath)) return null;
+  const database = new Database(databasePath, { readonly: true, fileMustExist: true });
+  try {
+    return database
+      .prepare("SELECT state, upload_id, spool_path FROM local_instance_upload WHERE sop_uid = ?")
+      .get(sopInstanceUid);
+  } finally {
+    database.close();
+  }
+}
+
+async function waitForDurableSpool(dicom, processHandle) {
+  const deadline = Date.now() + 90_000;
+  while (Date.now() < deadline) {
+    if (childError) throw new Error("Could not start compiled sync-service process.");
+    if (processHandle.exitCode !== null)
+      throw new Error(
+        `Compiled service exited before durable spooling (${processHandle.exitCode}).`,
+      );
+    const local = localUploadState(dicom.sopInstanceUid);
+    if (local?.state === "spooled" && local.spool_path) {
+      return local;
+    }
+    await delay(2);
+  }
+  throw new Error("Compiled service did not reach the durable source-spool boundary.");
+}
+
+async function waitForReceivedUpload(dicom, processHandle) {
+  const deadline = Date.now() + 30_000;
+  let local = null;
+  while (Date.now() < deadline) {
+    if (childError) throw new Error("Could not start compiled sync-service process.");
+    if (processHandle.exitCode !== null)
+      throw new Error(
+        `Compiled service exited before receipt checkpoint (${processHandle.exitCode}).`,
+      );
+    local = localUploadState(dicom.sopInstanceUid);
+    if (local?.state === "received" && local.upload_id && local.spool_path === null) return local;
+    await delay(100);
+  }
+  throw new Error(
+    `Compiled service did not persist the received upload checkpoint within 30 seconds (last state: ${local?.state ?? "none"}).`,
+  );
+}
+
+async function killChildForRecovery(processHandle) {
+  if (processHandle.exitCode !== null || processHandle.signalCode !== null)
+    throw new Error("Compiled service exited before the requested crash boundary.");
+  const exited = new Promise((resolveExit) =>
+    processHandle.once("exit", (code, signal) => resolveExit([code, signal])),
+  );
+  processHandle.kill("SIGKILL");
+  const [code, signal] = await Promise.race([
+    exited.then((value) => value),
+    delay(5_000).then(() => [null, null]),
+  ]);
+  if (signal !== "SIGKILL") throw new Error("Compiled service did not die from SIGKILL.");
+  return { code, signal };
+}
+
+function assertReportAndUploadCounts(dicom, expectedUploadCount, uploadId = null) {
+  const counts = psql(
+    `SELECT (SELECT count(*) FROM public.reports WHERE source_id='${sourceId}' AND study_instance_uid='${dicom.studyInstanceUid}')||'|'||(SELECT count(*) FROM public.ingestion_uploads u JOIN public.reports r ON r.id=u.report_id WHERE r.source_id='${sourceId}' AND r.study_instance_uid='${dicom.studyInstanceUid}')||'|'||COALESCE((SELECT min(u.id::text) FROM public.ingestion_uploads u JOIN public.reports r ON r.id=u.report_id WHERE r.source_id='${sourceId}' AND r.study_instance_uid='${dicom.studyInstanceUid}'),'');`,
+  );
+  const expected = `1|${expectedUploadCount}|${uploadId ?? ""}`;
+  if (counts !== expected)
+    throw new Error(`Expected ${expected} Report/upload counts; got ${counts}.`);
+}
+
+function cloudUploadState(dicom) {
+  const row = psql(
+    `SELECT count(*)||'|'||COALESCE(min(u.status),'')||'|'||COALESCE(min(u.id::text),'') FROM public.ingestion_uploads u JOIN public.reports r ON r.id=u.report_id WHERE r.source_id='${sourceId}' AND r.study_instance_uid='${dicom.studyInstanceUid}' AND u.expected_sha256='${sha(dicom.bytes)}';`,
+  );
+  const [count, status, id] = row.split("|");
+  return { count: Number(count), status, id: id || null };
 }
 
 async function verifyCloudOrthanc(dicom) {
@@ -367,9 +452,84 @@ try {
   await assertSopAbsentFromCloud(dicom.sopInstanceUid);
   const deviceAuthorization = prepareSource();
   const sourceOrthancInstanceId = await uploadSyntheticToSource(dicom);
-  const processHandle = launchService(deviceAuthorization);
+  let processHandle = launchService(deviceAuthorization);
+  const durableSpool = await waitForDurableSpool(dicom, processHandle);
+  if (!durableSpool.spool_path) throw new Error("Durable synthetic spool path is missing.");
+  const crash = await killChildForRecovery(processHandle);
+  const reopenedSpool = localUploadState(dicom.sopInstanceUid);
+  const beforeRestartCloud = cloudUploadState(dicom);
+  const crashBoundary =
+    beforeRestartCloud.count === 0
+      ? "durable_spool_before_cloud_admission"
+      : `durable_cloud_${beforeRestartCloud.status}`;
+  if (
+    !reopenedSpool ||
+    reopenedSpool.spool_path !== durableSpool.spool_path ||
+    beforeRestartCloud.count > 1 ||
+    (beforeRestartCloud.count === 0 &&
+      (reopenedSpool.state !== "spooled" || reopenedSpool.upload_id !== null)) ||
+    (beforeRestartCloud.count === 1 &&
+      (!beforeRestartCloud.id ||
+        reopenedSpool.upload_id !== beforeRestartCloud.id ||
+        !["admitted", "uploading"].includes(beforeRestartCloud.status) ||
+        !["authorized", "uploading"].includes(reopenedSpool.state)))
+  ) {
+    throw new Error(
+      "SQLite/cloud state did not retain one coherent upload boundary after SIGKILL.",
+    );
+  }
+  assertReportAndUploadCounts(dicom, beforeRestartCloud.count, beforeRestartCloud.id);
+  processHandle = launchService(deviceAuthorization, false);
   const cloudState = await waitForReady(dicom.studyInstanceUid, processHandle);
   const cloudOrthancInstanceId = await verifyCloudOrthanc(dicom);
+  const uploadId = psql(
+    `SELECT u.id FROM public.ingestion_uploads u JOIN public.reports r ON r.id=u.report_id WHERE r.source_id='${sourceId}' AND r.study_instance_uid='${dicom.studyInstanceUid}' AND u.expected_sha256='${sha(dicom.bytes)}';`,
+  );
+  assertReportAndUploadCounts(dicom, 1, uploadId);
+  const receivedCheckpoint = await waitForReceivedUpload(dicom, processHandle);
+  const postImportCloud = cloudUploadState(dicom);
+  if (
+    postImportCloud.count !== 1 ||
+    postImportCloud.status !== "completed" ||
+    postImportCloud.id !== receivedCheckpoint.upload_id
+  ) {
+    throw new Error(
+      "Post-import crash boundary was not a single completed cloud upload matching the local receipt.",
+    );
+  }
+  const postImportOrthancInstanceId = await verifyCloudOrthanc(dicom);
+  const postImportCrash = await killChildForRecovery(processHandle);
+  const checkpointAfterPostImportKill = localUploadState(dicom.sopInstanceUid);
+  const cloudAfterPostImportKill = cloudUploadState(dicom);
+  assertReportAndUploadCounts(dicom, 1, uploadId);
+  if (
+    postImportCrash.signal !== "SIGKILL" ||
+    checkpointAfterPostImportKill?.state !== "received" ||
+    checkpointAfterPostImportKill.upload_id !== receivedCheckpoint.upload_id ||
+    checkpointAfterPostImportKill.spool_path !== null ||
+    cloudAfterPostImportKill.count !== 1 ||
+    cloudAfterPostImportKill.status !== "completed" ||
+    cloudAfterPostImportKill.id !== receivedCheckpoint.upload_id
+  ) {
+    throw new Error(
+      "Completed cloud/import state did not survive the post-import SIGKILL coherently.",
+    );
+  }
+  processHandle = launchService(deviceAuthorization, false);
+  const postImportRestartState = await waitForReady(dicom.studyInstanceUid, processHandle);
+  const restartedOrthancInstanceId = await verifyCloudOrthanc(dicom);
+  const postImportRestartCloud = cloudUploadState(dicom);
+  assertReportAndUploadCounts(dicom, 1, uploadId);
+  if (
+    restartedOrthancInstanceId !== postImportOrthancInstanceId ||
+    postImportRestartCloud.count !== 1 ||
+    postImportRestartCloud.status !== "completed" ||
+    postImportRestartCloud.id !== receivedCheckpoint.upload_id
+  ) {
+    throw new Error(
+      "Post-import restart changed or duplicated the completed upload or Orthanc instance.",
+    );
+  }
   const shutdown = await stopChild();
   if (!sigtermRequested || shutdown?.code !== 0 || shutdown.signal !== null) {
     throw new Error("Compiled sync-service did not stop gracefully after SIGTERM.");
@@ -382,6 +542,16 @@ try {
     sourceOrthancInstanceId,
     cloudOrthancInstanceId,
     cloudState,
+    crashSignal: crash.signal,
+    postImportCrashSignal: postImportCrash.signal,
+    postImportCrashBoundary: "completed_cloud_upload_and_verified_orthanc_import",
+    postImportRestartState,
+    postImportRestartPreservedUploadAndInstance: true,
+    durableSpoolSurvivedKill: true,
+    crashBoundary,
+    uploadRowsBeforeRestart: beforeRestartCloud.count,
+    uploadStateBeforeRestart: beforeRestartCloud.status || null,
+    uploadCountAfterRestart: 1,
     sourceBytes: dicom.bytes.byteLength,
     sourceSha256: sha(dicom.bytes),
     compiledEntry: true,
@@ -393,7 +563,12 @@ try {
       "signed object upload and cloud manifest seal",
       "worker marked the source-backed Report Ready",
       "Cloud Orthanc UID and byte readback matched the synthetic source",
-      "compiled sync-service stopped with SIGTERM",
+      "SIGKILL after the durable local source spool and crash-time cloud checkpoint inspection",
+      "compiled sync-service reopened the same SQLite/spool paths and reached Ready",
+      "one Report and one cloud upload remained after restart",
+      "SIGKILL after the completed cloud upload, local received checkpoint, and exact Orthanc readback",
+      "compiled sync-service restarted from the received checkpoint without changing the cloud upload or Orthanc instance",
+      "compiled sync-service stopped with SIGTERM after recovery",
     ],
   };
   if (resultFile) await writeFile(resultFile, `${JSON.stringify(result)}\n`, { mode: 0o600 });

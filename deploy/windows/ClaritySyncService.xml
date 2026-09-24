@@ -3,7 +3,7 @@
   <name>Clarity V2 Sync</name>
   <description>Clarity V2 private Orthanc synchronization service</description>
   <workingdirectory>%BASE%</workingdirectory>
-  <startmode>Manual</startmode>
+  <startmode>Automatic</startmode>
   <serviceaccount>
     <domain>NT AUTHORITY</domain>
     <user>LocalService</user>
