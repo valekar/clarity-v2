@@ -133,7 +133,7 @@ export function formatCapacity(bytes: number): string {
 export function sourceHealthMessage(item: SourceHealthItem): string {
   if (item.status === "stale")
     return "No recent source report. Current source and cloud status is unknown.";
-  if (item.status === "offline") return "The source could not be reached at its last report.";
+  if (item.status === "offline") return "The source could not be reached at its last sync.";
   if (
     item.status === "attention" &&
     item.spoolFreeBytes !== null &&
@@ -143,7 +143,7 @@ export function sourceHealthMessage(item: SourceHealthItem): string {
   }
   if (item.status === "attention") return "Sync needs attention. Check the source service.";
   if (item.sourceReachable === true && item.cloudReachable === true) {
-    return "Source and cloud were reachable at the last report.";
+    return "The source was reachable at last sync; the cloud is responding.";
   }
   return "Source status was reported recently.";
 }

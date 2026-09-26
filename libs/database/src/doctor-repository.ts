@@ -4,7 +4,7 @@ import {
   decideDoctorCreation,
   doctorIdentityName,
   normalizeDoctorName,
-  validPhoneE164,
+  validIndianMobileE164,
   type DoctorRecord,
 } from "@clarity/domain/doctors";
 
@@ -91,6 +91,7 @@ export function createDoctorRepository(pool: Pool): DoctorRepository {
   return Object.freeze({
     async search(query: string, limit = 20): Promise<readonly DoctorRecord[]> {
       const normalized = doctorIdentityName(query);
+      const phoneQuery = normalized.replace(/[\s()-]/g, "");
       if (
         normalized.length > 80 ||
         /[\x00-\x1f\x7f]/.test(normalized) ||
@@ -100,12 +101,11 @@ export function createDoctorRepository(pool: Pool): DoctorRepository {
       ) {
         throw new TypeError("Invalid doctor search.");
       }
-      if (normalized.length < 2) return [];
       const rows = await pool.query<DoctorRow>(
         `SELECT ${fields} FROM public.doctors
-          WHERE active AND (position($1 in normalized_name) > 0 OR position($1 in phone_e164) > 0)
-          ORDER BY normalized_name, id LIMIT $2`,
-        [normalized, limit],
+          WHERE active AND ($1 = '' OR position($1 in normalized_name) > 0 OR position($2 in phone_e164) > 0)
+          ORDER BY normalized_name, id LIMIT $3`,
+        [normalized, phoneQuery, limit],
       );
       return rows.rows.map(record);
     },
@@ -126,7 +126,7 @@ export function createDoctorRepository(pool: Pool): DoctorRepository {
         !displayName ||
         displayName.length > 160 ||
         /[\x00-\x1f\x7f]/.test(displayName) ||
-        !validPhoneE164(input.phoneE164) ||
+        !validIndianMobileE164(input.phoneE164) ||
         !uuid.test(input.actorStaffUserId)
       ) {
         throw new TypeError("Invalid doctor details.");

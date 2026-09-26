@@ -1,12 +1,17 @@
 import { chmod, lstat, mkdir, stat } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { dirname, isAbsolute, resolve } from "node:path";
 import { InventoryCoordinator } from "./discovery/inventory-coordinator.js";
 import { CheckpointStore } from "./persistence/checkpoint-store.js";
 import { OrthancChangeFeedAdapter } from "./orthanc/change-feed.js";
 import { OrthancDiscoveryClient } from "./orthanc/discovery-client.js";
 import { SyncLoop } from "./runtime/sync-loop.js";
 import { acquireServiceLock } from "./runtime/service-lock.js";
-import { loadRuntimeEnvironment } from "./runtime/config-file.js";
+import {
+  loadRuntimeEnvironment,
+  readPrivateConfigUpdate,
+  writePrivateRuntimeConfig,
+} from "./runtime/config-file.js";
+import { pollIntervalMs } from "./runtime/poll-interval.js";
 import { IngestionClient } from "./transfers/ingestion-client.js";
 
 interface RuntimeConfig {
@@ -18,6 +23,7 @@ interface RuntimeConfig {
   apiUrl: string;
   deviceAuthorization: string;
   insecureLoopback: boolean;
+  pollIntervalMs: number;
 }
 
 function required(environment: NodeJS.ProcessEnv, name: string): string {
@@ -61,30 +67,51 @@ function config(environment: NodeJS.ProcessEnv): RuntimeConfig {
   ) {
     throw new Error("issued device authorization is invalid");
   }
+  const orthancUrl = privateEndpoint(
+    required(environment, "CLARITY_ORTHANC_URL"),
+    insecureLoopback,
+    "Orthanc URL",
+  );
+  const apiUrl = privateEndpoint(
+    required(environment, "CLARITY_INGESTION_API_URL"),
+    insecureLoopback,
+    "ingestion API URL",
+  );
   return {
     sourceKey,
     databasePath: resolve(required(environment, "CLARITY_SYNC_STATE_DB")),
     spoolDirectory: resolve(required(environment, "CLARITY_SYNC_SPOOL_DIR")),
-    orthancUrl: privateEndpoint(
-      required(environment, "CLARITY_ORTHANC_URL"),
-      insecureLoopback,
-      "Orthanc URL",
-    ),
+    orthancUrl,
     orthancAuthorization,
-    apiUrl: privateEndpoint(
-      required(environment, "CLARITY_INGESTION_API_URL"),
-      insecureLoopback,
-      "ingestion API URL",
-    ),
+    apiUrl,
     deviceAuthorization,
     insecureLoopback,
+    pollIntervalMs: pollIntervalMs(environment),
   };
 }
 
 async function main(): Promise<void> {
+  const args = process.argv.slice(2);
+  if (args[0] === "--write-config") {
+    if (args.length !== 2 || !isAbsolute(args[1]!)) {
+      process.stderr.write("configuration writer requires one absolute path\n");
+      process.exitCode = 64;
+      return;
+    }
+    try {
+      const updates = await readPrivateConfigUpdate(process.stdin);
+      await writePrivateRuntimeConfig(args[1]!, updates);
+      process.stdout.write("private source settings saved\n");
+    } catch {
+      process.stderr.write("private source settings could not be saved\n");
+      process.exitCode = 78;
+    }
+    return;
+  }
+
   let runtime: RuntimeConfig;
   try {
-    runtime = config(await loadRuntimeEnvironment(process.argv.slice(2)));
+    runtime = config(await loadRuntimeEnvironment(args));
   } catch {
     process.stderr.write(
       "sync service configuration is missing or invalid; service remains inactive\n",
@@ -141,7 +168,7 @@ async function main(): Promise<void> {
       reserveFreeBytes: 1024 * 1024 * 1024,
       pageBudget: 10,
       uploadBatchSize: 10,
-      pollIntervalMs: 5_000,
+      pollIntervalMs: runtime.pollIntervalMs,
       reconciliationIntervalMs: 60 * 60 * 1000,
       onDiagnostic: (message) => process.stderr.write(`sync: ${message.slice(0, 300)}\n`),
     });

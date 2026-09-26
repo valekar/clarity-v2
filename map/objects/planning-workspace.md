@@ -4,8 +4,8 @@ type: object
 title: V2 planning workspace
 universe: live
 status: verified
-updated: 2026-09-23
-revision: implementation-foundation-2026-09-23
+updated: 2026-09-24
+revision: in-window-source-settings-2026-09-24
 ---
 
 # V2 planning workspace
@@ -48,5 +48,7 @@ No known external automation points into this newly created workspace.
 
 ## See
 
-[Plan v1.2](../../docs/01-final-clarity-v2-plan.md) and
-[dated session evidence](../sessions/2026-09-23-v2-planning.md).
+[Plan v1.4](../../docs/01-final-clarity-v2-plan.md) and
+[dated session evidence](../sessions/2026-09-23-v2-planning.md), including the
+[desktop clarification](../sessions/2026-09-24-desktop-onboarding-source-settings.md)
+and [in-window Settings correction](../sessions/2026-09-24-in-window-source-settings.md).

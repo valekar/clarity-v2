@@ -39,8 +39,9 @@ export async function POST(request: Request): Promise<Response> {
       return errorResponse(400, "invalid_request");
     }
     if (
-      typeof body.sourceGeneration !== "string" ||
-      !FENCE.test(body.sourceGeneration) ||
+      typeof body.sourceGeneration !== "number" ||
+      !Number.isSafeInteger(body.sourceGeneration) ||
+      body.sourceGeneration < 1 ||
       typeof body.fencingToken !== "string" ||
       !FENCE.test(body.fencingToken) ||
       typeof body.sourceReachable !== "boolean" ||
@@ -71,14 +72,14 @@ export async function POST(request: Request): Promise<Response> {
     if (!identity.ok) return errorResponse(identity.status, identity.reason);
     const access = await services.guard.authorizeMutation(authorization, {
       sourceId: identity.sourceId,
-      sourceGeneration: body.sourceGeneration,
+      sourceGeneration: String(body.sourceGeneration),
       fencingToken: body.fencingToken,
     });
     if (!access.ok) return errorResponse(access.status, access.reason);
     const reportedAt = await services.devices.reportHealth({
       sourceId: access.sourceId,
       deviceId: access.deviceId,
-      sourceGeneration: body.sourceGeneration,
+      sourceGeneration: String(body.sourceGeneration),
       fencingToken: body.fencingToken,
       sourceReachable: body.sourceReachable,
       syncState: body.syncState as "idle" | "syncing" | "attention",

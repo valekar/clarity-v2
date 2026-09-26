@@ -4,8 +4,8 @@ type: object
 title: Report and verified imaging package
 universe: ghost
 status: stub
-updated: 2026-09-23
-revision: manifest-admission-cutoff-0015-2026-09-23
+updated: 2026-09-24
+revision: indian-doctor-directory-ui-2026-09-24
 ---
 
 # Report and verified imaging package
@@ -75,7 +75,9 @@ Ingested by [source/service](source-and-service.md); viewed by authorized
 after explicit Send; no public clinical access is implemented. A synthetic
 [doctor directory and API](../../docs/evidence/23-doctor-directory.md) now
 support doctor selection groundwork; recipient verification and dispatch remain
-open.
+open. Its [Indian staff UI correction](../../docs/evidence/43-indian-doctor-directory-ui.md)
+adds readable directory listing/search and synthetic doctor entry, without
+changing the sharing release gate.
 
 ## If you change this
 

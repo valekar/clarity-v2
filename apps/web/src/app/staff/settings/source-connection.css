@@ -1,0 +1,35 @@
+.source-connection-panel {
+  margin: 1.5rem 0;
+  padding: 1.5rem;
+  border: 1px solid #dce5ef;
+  border-radius: 0.8rem;
+  background: #fff;
+}
+
+.source-connection-heading h2 {
+  margin: 0.3rem 0 0;
+  font-size: 1.25rem;
+}
+
+.source-connection-intro,
+.source-connection-feedback {
+  color: #627387;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.source-connection-open {
+  min-height: 2.5rem;
+  padding: 0.45rem 0.8rem;
+  border: 1px solid #1e5a95;
+  border-radius: 0.45rem;
+  background: #1e5a95;
+  color: #fff;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.source-connection-open:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}

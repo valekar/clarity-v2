@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { setTimeout as delay } from "node:timers/promises";
+import { runInteractiveSyntheticDemo } from "./interactive-synthetic-demo.mjs";
 
 const root = resolve(new URL("../../..", import.meta.url).pathname);
 const project = process.env.CLARITY_PROOF_PROJECT;
@@ -16,6 +17,16 @@ const cloudOrthancUrl = process.env.CLARITY_PROOF_CLOUD_ORTHANC_URL;
 const orthancUser = process.env.ORTHANC_HTTP_USERNAME;
 const orthancPassword = process.env.ORTHANC_HTTP_PASSWORD;
 const resultFile = process.env.CLARITY_PROOF_RESULT_FILE;
+const interactiveDemo = process.env.CLARITY_INTERACTIVE_SYNTHETIC_DEMO === "1";
+const syncConfigPath = process.env.CLARITY_SYNC_CONFIG_PATH;
+const demoManifestPath = process.env.CLARITY_SYNTHETIC_DEMO_MANIFEST;
+const demoAdminPath = process.env.CLARITY_SYNTHETIC_DEMO_ADMIN;
+const demoStaffPath = process.env.CLARITY_SYNTHETIC_DEMO_STAFF;
+const demoDashboardUrl = process.env.CLARITY_SYNTHETIC_DEMO_DASHBOARD_URL;
+const demoHankoUrl = process.env.CLARITY_SYNTHETIC_DEMO_HANKO_URL;
+const demoMailpitUrl = process.env.CLARITY_SYNTHETIC_DEMO_MAILPIT_URL;
+const launchElectron = process.env.CLARITY_SYNTHETIC_DEMO_ELECTRON === "1";
+const configWriterPath = process.env.CLARITY_SYNC_CONFIG_WRITER;
 const pnpm = process.env.PNPM ?? "pnpm";
 if (!project || !envFile || !webUrl || !cloudOrthancUrl || !orthancUser || !orthancPassword) {
   throw new Error(
@@ -43,11 +54,31 @@ const sourceImage =
   "orthancteam/orthanc:26.8.2@sha256:9758c8702a89abece99fcfe6d5571d5eaae59587e8e1ce36b9aafc8d4f24457b";
 const temp = await mkdtemp(join(tmpdir(), "clarity-v2-sync-process-proof-"));
 await chmod(temp, 0o700);
+if (
+  interactiveDemo &&
+  (!syncConfigPath ||
+    !demoManifestPath ||
+    !demoDashboardUrl ||
+    !demoHankoUrl ||
+    !demoMailpitUrl ||
+    !configWriterPath)
+) {
+  throw new Error(
+    "Interactive demo config path, manifest, Hanko/Mailpit URLs and writer paths are required.",
+  );
+}
+const demoRunDirectory = interactiveDemo ? join(dirname(syncConfigPath), "runs", sourceId) : temp;
+if (interactiveDemo) await mkdir(demoRunDirectory, { recursive: true, mode: 0o700 });
+if (interactiveDemo) await chmod(demoRunDirectory, 0o700);
+const stateDirectory = join(demoRunDirectory, "state");
+const spoolDirectory = join(demoRunDirectory, "spool");
+await mkdir(stateDirectory, { recursive: true, mode: 0o700 });
+await chmod(stateDirectory, 0o700);
+await mkdir(spoolDirectory, { recursive: true, mode: 0o700 });
+await chmod(spoolDirectory, 0o700);
 const sourceConfigPath = join(temp, "source-orthanc.json");
 const sourceOrthancPassword = credential();
 const sourceAuthorization = `Basic ${Buffer.from(`proof:${sourceOrthancPassword}`).toString("base64")}`;
-const stateDirectory = join(temp, "state");
-const spoolDirectory = join(temp, "spool");
 const databasePath = join(stateDirectory, "sync.sqlite");
 const serviceRequire = createRequire(join(root, "apps/sync-service/package.json"));
 const Database = serviceRequire("better-sqlite3");
@@ -251,34 +282,47 @@ async function uploadSyntheticToSource(dicom) {
   return value.ID;
 }
 
-function launchService(deviceAuthorization, build = true) {
+function launchService(deviceAuthorization, build = true, demoConfig = false) {
   if (build) {
     checked(pnpm, ["exec", "turbo", "run", "build", "--filter=@clarity/sync-service..."], {
       timeout: 120_000,
     });
   }
-  child = spawn(process.execPath, [join(root, "apps/sync-service/dist/main.js")], {
-    cwd: root,
-    env: {
-      ...process.env,
-      CLARITY_SYNC_SOURCE_KEY: sourceId,
-      CLARITY_SYNC_STATE_DB: databasePath,
-      CLARITY_SYNC_SPOOL_DIR: spoolDirectory,
-      CLARITY_ORTHANC_URL: sourceUrl,
-      CLARITY_ORTHANC_AUTHORIZATION: sourceAuthorization,
-      CLARITY_INGESTION_API_URL: webUrl,
-      CLARITY_DEVICE_AUTHORIZATION: deviceAuthorization,
-      CLARITY_SYNC_ALLOW_INSECURE_LOCALHOST: "1",
-    },
-    stdio: ["ignore", "pipe", "pipe"],
-  });
+  stopping = undefined;
+  childError = undefined;
+  const serviceEntry = join(root, "apps/sync-service/dist/main.js");
+  const serviceEnvironment = demoConfig
+    ? Object.fromEntries(
+        ["PATH", "HOME", "TMPDIR", "LANG", "LC_ALL"]
+          .filter((key) => process.env[key] !== undefined)
+          .map((key) => [key, process.env[key]]),
+      )
+    : {
+        ...process.env,
+        CLARITY_SYNC_SOURCE_KEY: sourceId,
+        CLARITY_SYNC_STATE_DB: databasePath,
+        CLARITY_SYNC_SPOOL_DIR: spoolDirectory,
+        CLARITY_ORTHANC_URL: sourceUrl,
+        CLARITY_ORTHANC_AUTHORIZATION: sourceAuthorization,
+        CLARITY_INGESTION_API_URL: webUrl,
+        CLARITY_DEVICE_AUTHORIZATION: deviceAuthorization,
+        CLARITY_SYNC_ALLOW_INSECURE_LOCALHOST: "1",
+        CLARITY_SYNC_SYNTHETIC_POLL_INTERVAL_SECONDS: "5",
+      };
+  child = spawn(
+    process.execPath,
+    demoConfig ? [serviceEntry, "--config", syncConfigPath] : [serviceEntry],
+    { cwd: root, env: serviceEnvironment, stdio: ["ignore", "pipe", "pipe"] },
+  );
   let stdout = "";
   let stderr = "";
   child.stdout.setEncoding("utf8").on("data", (chunk) => {
     stdout = `${stdout}${chunk}`.slice(-2000);
+    if (interactiveDemo) process.stdout.write(chunk);
   });
   child.stderr.setEncoding("utf8").on("data", (chunk) => {
     stderr = `${stderr}${chunk}`.slice(-2000);
+    if (interactiveDemo) process.stderr.write(chunk);
   });
   child.once("error", (error) => {
     childError = error;
@@ -309,6 +353,12 @@ function localUploadState(sopInstanceUid) {
   if (!existsSync(databasePath)) return null;
   const database = new Database(databasePath, { readonly: true, fileMustExist: true });
   try {
+    const uploadTable = database
+      .prepare(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'local_instance_upload'",
+      )
+      .get();
+    if (!uploadTable) return null;
     return database
       .prepare("SELECT state, upload_id, spool_path FROM local_instance_upload WHERE sop_uid = ?")
       .get(sopInstanceUid);
@@ -477,138 +527,170 @@ async function stopChild() {
 
 let result;
 try {
-  await startSourceOrthanc();
-  const dicom = await writeDicom();
-  await assertSopAbsentFromCloud(dicom.sopInstanceUid);
-  const deviceAuthorization = prepareSource();
-  const sourceOrthancInstanceId = await uploadSyntheticToSource(dicom);
-  let processHandle = launchService(deviceAuthorization);
-  const durableSpool = await waitForDurableSpool(dicom, processHandle);
-  if (!durableSpool.spool_path) throw new Error("Durable synthetic spool path is missing.");
-  const crash = await killChildForRecovery(processHandle);
-  const reopenedSpool = localUploadState(dicom.sopInstanceUid);
-  const beforeRestartCloud = cloudUploadState(dicom);
-  const crashBoundary =
-    beforeRestartCloud.count === 0
-      ? "durable_spool_before_cloud_admission"
-      : `durable_cloud_${beforeRestartCloud.status}`;
-  if (
-    !reopenedSpool ||
-    reopenedSpool.spool_path !== durableSpool.spool_path ||
-    beforeRestartCloud.count > 1 ||
-    (beforeRestartCloud.count === 0 &&
-      (reopenedSpool.state !== "spooled" || reopenedSpool.upload_id !== null)) ||
-    (beforeRestartCloud.count === 1 &&
-      (!beforeRestartCloud.id ||
-        reopenedSpool.upload_id !== beforeRestartCloud.id ||
-        !["admitted", "uploading"].includes(beforeRestartCloud.status) ||
-        !["authorized", "uploading"].includes(reopenedSpool.state)))
-  ) {
-    throw new Error(
-      "SQLite/cloud state did not retain one coherent upload boundary after SIGKILL.",
+  if (interactiveDemo) {
+    checked(pnpm, ["exec", "turbo", "run", "build", "--filter=@clarity/sync-service..."], {
+      timeout: 120_000,
+    });
+    await runInteractiveSyntheticDemo({
+      startSourceOrthanc,
+      getSourceUrl: () => sourceUrl,
+      sourceOrthancPassword,
+      prepareSource,
+      sourceId,
+      databasePath,
+      spoolDirectory,
+      webUrl,
+      dashboardUrl: demoDashboardUrl,
+      hankoUrl: demoHankoUrl,
+      mailpitUrl: demoMailpitUrl,
+      configPath: syncConfigPath,
+      configWriterPath,
+      manifestPath: demoManifestPath,
+      adminPath: demoAdminPath,
+      staffPath: demoStaffPath,
+      nodePath: process.execPath,
+      electronEnabled: launchElectron,
+      repoRoot: root,
+      pnpm,
+      launchService: () => launchService("", false, true),
+      stopService: stopChild,
+    });
+    result = { interactiveDemo: true, stayedAvailableUntilSignal: true };
+    if (resultFile) await writeFile(resultFile, `${JSON.stringify(result)}\n`, { mode: 0o600 });
+  } else {
+    await startSourceOrthanc();
+    const dicom = await writeDicom();
+    await assertSopAbsentFromCloud(dicom.sopInstanceUid);
+    const deviceAuthorization = prepareSource();
+    const sourceOrthancInstanceId = await uploadSyntheticToSource(dicom);
+    let processHandle = launchService(deviceAuthorization);
+    const durableSpool = await waitForDurableSpool(dicom, processHandle);
+    if (!durableSpool.spool_path) throw new Error("Durable synthetic spool path is missing.");
+    const crash = await killChildForRecovery(processHandle);
+    const reopenedSpool = localUploadState(dicom.sopInstanceUid);
+    const beforeRestartCloud = cloudUploadState(dicom);
+    const crashBoundary =
+      beforeRestartCloud.count === 0
+        ? "durable_spool_before_cloud_admission"
+        : `durable_cloud_${beforeRestartCloud.status}`;
+    if (
+      !reopenedSpool ||
+      reopenedSpool.spool_path !== durableSpool.spool_path ||
+      beforeRestartCloud.count > 1 ||
+      (beforeRestartCloud.count === 0 &&
+        (reopenedSpool.state !== "spooled" || reopenedSpool.upload_id !== null)) ||
+      (beforeRestartCloud.count === 1 &&
+        (!beforeRestartCloud.id ||
+          reopenedSpool.upload_id !== beforeRestartCloud.id ||
+          !["admitted", "uploading"].includes(beforeRestartCloud.status) ||
+          !["authorized", "uploading"].includes(reopenedSpool.state)))
+    ) {
+      throw new Error(
+        "SQLite/cloud state did not retain one coherent upload boundary after SIGKILL.",
+      );
+    }
+    assertReportAndUploadCounts(dicom, beforeRestartCloud.count, beforeRestartCloud.id);
+    processHandle = launchService(deviceAuthorization, false);
+    const cloudState = await waitForReady(dicom.studyInstanceUid, processHandle);
+    const cloudOrthancInstanceId = await verifyCloudOrthanc(dicom);
+    const uploadId = psql(
+      `SELECT u.id FROM public.ingestion_uploads u JOIN public.reports r ON r.id=u.report_id WHERE r.source_id='${sourceId}' AND r.study_instance_uid='${dicom.studyInstanceUid}' AND u.expected_sha256='${sha(dicom.bytes)}';`,
     );
-  }
-  assertReportAndUploadCounts(dicom, beforeRestartCloud.count, beforeRestartCloud.id);
-  processHandle = launchService(deviceAuthorization, false);
-  const cloudState = await waitForReady(dicom.studyInstanceUid, processHandle);
-  const cloudOrthancInstanceId = await verifyCloudOrthanc(dicom);
-  const uploadId = psql(
-    `SELECT u.id FROM public.ingestion_uploads u JOIN public.reports r ON r.id=u.report_id WHERE r.source_id='${sourceId}' AND r.study_instance_uid='${dicom.studyInstanceUid}' AND u.expected_sha256='${sha(dicom.bytes)}';`,
-  );
-  assertReportAndUploadCounts(dicom, 1, uploadId);
-  const receivedCheckpoint = await waitForReceivedUpload(dicom, processHandle);
-  const postImportCloud = cloudUploadState(dicom);
-  if (
-    postImportCloud.count !== 1 ||
-    postImportCloud.status !== "completed" ||
-    postImportCloud.id !== receivedCheckpoint.upload_id
-  ) {
-    throw new Error(
-      "Post-import crash boundary was not a single completed cloud upload matching the local receipt.",
+    assertReportAndUploadCounts(dicom, 1, uploadId);
+    const receivedCheckpoint = await waitForReceivedUpload(dicom, processHandle);
+    const postImportCloud = cloudUploadState(dicom);
+    if (
+      postImportCloud.count !== 1 ||
+      postImportCloud.status !== "completed" ||
+      postImportCloud.id !== receivedCheckpoint.upload_id
+    ) {
+      throw new Error(
+        "Post-import crash boundary was not a single completed cloud upload matching the local receipt.",
+      );
+    }
+    const postImportOrthancInstanceId = await verifyCloudOrthanc(dicom);
+    const postImportCrash = await killChildForRecovery(processHandle);
+    const sourcePollAfterPostImportKill = localSourcePollTime();
+    const checkpointAfterPostImportKill = localUploadState(dicom.sopInstanceUid);
+    const cloudAfterPostImportKill = cloudUploadState(dicom);
+    assertReportAndUploadCounts(dicom, 1, uploadId);
+    if (
+      postImportCrash.signal !== "SIGKILL" ||
+      checkpointAfterPostImportKill?.state !== "received" ||
+      checkpointAfterPostImportKill.upload_id !== receivedCheckpoint.upload_id ||
+      checkpointAfterPostImportKill.spool_path !== null ||
+      cloudAfterPostImportKill.count !== 1 ||
+      cloudAfterPostImportKill.status !== "completed" ||
+      cloudAfterPostImportKill.id !== receivedCheckpoint.upload_id
+    ) {
+      throw new Error(
+        "Completed cloud/import state did not survive the post-import SIGKILL coherently.",
+      );
+    }
+    processHandle = launchService(deviceAuthorization, false);
+    const sourcePollAfterPostImportRestart = await waitForFreshSourcePoll(
+      sourcePollAfterPostImportKill,
+      processHandle,
     );
+    const postImportRestartState = await waitForReady(dicom.studyInstanceUid, processHandle);
+    const restartedOrthancInstanceId = await verifyCloudOrthanc(dicom);
+    const postImportRestartCloud = cloudUploadState(dicom);
+    assertReportAndUploadCounts(dicom, 1, uploadId);
+    if (
+      restartedOrthancInstanceId !== postImportOrthancInstanceId ||
+      postImportRestartCloud.count !== 1 ||
+      postImportRestartCloud.status !== "completed" ||
+      postImportRestartCloud.id !== receivedCheckpoint.upload_id
+    ) {
+      throw new Error(
+        "Post-import restart changed or duplicated the completed upload or Orthanc instance.",
+      );
+    }
+    const shutdown = await stopChild();
+    if (!sigtermRequested || shutdown?.code !== 0 || shutdown.signal !== null) {
+      throw new Error("Compiled sync-service did not stop gracefully after SIGTERM.");
+    }
+    result = {
+      sourceId,
+      studyInstanceUid: dicom.studyInstanceUid,
+      seriesInstanceUid: dicom.seriesInstanceUid,
+      sopInstanceUid: dicom.sopInstanceUid,
+      sourceOrthancInstanceId,
+      cloudOrthancInstanceId,
+      cloudState,
+      crashSignal: crash.signal,
+      postImportCrashSignal: postImportCrash.signal,
+      postImportCrashBoundary: "completed_cloud_upload_and_verified_orthanc_import",
+      postImportRestartState,
+      postImportRestartPolledSource: Boolean(sourcePollAfterPostImportRestart),
+      postImportRestartPreservedUploadAndInstance: true,
+      durableSpoolSurvivedKill: true,
+      crashBoundary,
+      uploadRowsBeforeRestart: beforeRestartCloud.count,
+      uploadStateBeforeRestart: beforeRestartCloud.status || null,
+      uploadCountAfterRestart: 1,
+      sourceBytes: dicom.bytes.byteLength,
+      sourceSha256: sha(dicom.bytes),
+      compiledEntry: true,
+      processStartedAndStopped: true,
+      proof: [
+        "synthetic DICOM uploaded to the disposable source Orthanc",
+        "compiled sync-service discovered the source Study and Instance",
+        "cloud device lease and study admission",
+        "signed object upload and cloud manifest seal",
+        "worker marked the source-backed Report Ready",
+        "Cloud Orthanc UID and byte readback matched the synthetic source",
+        "SIGKILL after the durable local source spool and crash-time cloud checkpoint inspection",
+        "compiled sync-service reopened the same SQLite/spool paths and reached Ready",
+        "one Report and one cloud upload remained after restart",
+        "SIGKILL after the completed cloud upload, local received checkpoint, and exact Orthanc readback",
+        "compiled sync-service durably polled the source after restart without changing the cloud upload or Orthanc instance",
+        "compiled sync-service stopped with SIGTERM after recovery",
+      ],
+    };
+    if (resultFile) await writeFile(resultFile, `${JSON.stringify(result)}\n`, { mode: 0o600 });
+    console.log(JSON.stringify(result));
   }
-  const postImportOrthancInstanceId = await verifyCloudOrthanc(dicom);
-  const postImportCrash = await killChildForRecovery(processHandle);
-  const sourcePollAfterPostImportKill = localSourcePollTime();
-  const checkpointAfterPostImportKill = localUploadState(dicom.sopInstanceUid);
-  const cloudAfterPostImportKill = cloudUploadState(dicom);
-  assertReportAndUploadCounts(dicom, 1, uploadId);
-  if (
-    postImportCrash.signal !== "SIGKILL" ||
-    checkpointAfterPostImportKill?.state !== "received" ||
-    checkpointAfterPostImportKill.upload_id !== receivedCheckpoint.upload_id ||
-    checkpointAfterPostImportKill.spool_path !== null ||
-    cloudAfterPostImportKill.count !== 1 ||
-    cloudAfterPostImportKill.status !== "completed" ||
-    cloudAfterPostImportKill.id !== receivedCheckpoint.upload_id
-  ) {
-    throw new Error(
-      "Completed cloud/import state did not survive the post-import SIGKILL coherently.",
-    );
-  }
-  processHandle = launchService(deviceAuthorization, false);
-  const sourcePollAfterPostImportRestart = await waitForFreshSourcePoll(
-    sourcePollAfterPostImportKill,
-    processHandle,
-  );
-  const postImportRestartState = await waitForReady(dicom.studyInstanceUid, processHandle);
-  const restartedOrthancInstanceId = await verifyCloudOrthanc(dicom);
-  const postImportRestartCloud = cloudUploadState(dicom);
-  assertReportAndUploadCounts(dicom, 1, uploadId);
-  if (
-    restartedOrthancInstanceId !== postImportOrthancInstanceId ||
-    postImportRestartCloud.count !== 1 ||
-    postImportRestartCloud.status !== "completed" ||
-    postImportRestartCloud.id !== receivedCheckpoint.upload_id
-  ) {
-    throw new Error(
-      "Post-import restart changed or duplicated the completed upload or Orthanc instance.",
-    );
-  }
-  const shutdown = await stopChild();
-  if (!sigtermRequested || shutdown?.code !== 0 || shutdown.signal !== null) {
-    throw new Error("Compiled sync-service did not stop gracefully after SIGTERM.");
-  }
-  result = {
-    sourceId,
-    studyInstanceUid: dicom.studyInstanceUid,
-    seriesInstanceUid: dicom.seriesInstanceUid,
-    sopInstanceUid: dicom.sopInstanceUid,
-    sourceOrthancInstanceId,
-    cloudOrthancInstanceId,
-    cloudState,
-    crashSignal: crash.signal,
-    postImportCrashSignal: postImportCrash.signal,
-    postImportCrashBoundary: "completed_cloud_upload_and_verified_orthanc_import",
-    postImportRestartState,
-    postImportRestartPolledSource: Boolean(sourcePollAfterPostImportRestart),
-    postImportRestartPreservedUploadAndInstance: true,
-    durableSpoolSurvivedKill: true,
-    crashBoundary,
-    uploadRowsBeforeRestart: beforeRestartCloud.count,
-    uploadStateBeforeRestart: beforeRestartCloud.status || null,
-    uploadCountAfterRestart: 1,
-    sourceBytes: dicom.bytes.byteLength,
-    sourceSha256: sha(dicom.bytes),
-    compiledEntry: true,
-    processStartedAndStopped: true,
-    proof: [
-      "synthetic DICOM uploaded to the disposable source Orthanc",
-      "compiled sync-service discovered the source Study and Instance",
-      "cloud device lease and study admission",
-      "signed object upload and cloud manifest seal",
-      "worker marked the source-backed Report Ready",
-      "Cloud Orthanc UID and byte readback matched the synthetic source",
-      "SIGKILL after the durable local source spool and crash-time cloud checkpoint inspection",
-      "compiled sync-service reopened the same SQLite/spool paths and reached Ready",
-      "one Report and one cloud upload remained after restart",
-      "SIGKILL after the completed cloud upload, local received checkpoint, and exact Orthanc readback",
-      "compiled sync-service durably polled the source after restart without changing the cloud upload or Orthanc instance",
-      "compiled sync-service stopped with SIGTERM after recovery",
-    ],
-  };
-  if (resultFile) await writeFile(resultFile, `${JSON.stringify(result)}\n`, { mode: 0o600 });
-  console.log(JSON.stringify(result));
 } finally {
   await stopChild();
   await cleanupDocker();

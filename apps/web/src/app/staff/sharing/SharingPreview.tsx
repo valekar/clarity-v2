@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { formatIndianMobile, normalizeIndianMobile } from "../../../lib/indian-mobile";
 import styles from "../StaffTools.module.css";
 
 type Doctor = Readonly<{
@@ -16,7 +17,6 @@ type DoctorCreate =
   | Readonly<{ outcome: "created" | "reused"; doctor: Doctor }>
   | Readonly<{ outcome: "inactive_exact_match"; doctor: Doctor }>
   | Readonly<{ outcome: "confirm_shared_phone"; matches: readonly Doctor[] }>;
-const e164 = /^\+[1-9][0-9]{7,14}$/;
 
 export function SharingPreview() {
   const [patientPhone, setPatientPhone] = useState("");
@@ -77,7 +77,7 @@ export function SharingPreview() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           displayName: newDoctorName,
-          phoneE164: newDoctorPhone,
+          phoneE164: normalizeIndianMobile(newDoctorPhone),
           confirmedSharedPhone: confirmSharedPhone,
         }),
       });
@@ -131,19 +131,19 @@ export function SharingPreview() {
           Enter test details only. The form does not contact recipients or create a report link.
         </p>
         <label className={styles.field}>
-          Patient mobile (international format)
+          Patient mobile
           <input
             type="tel"
             inputMode="tel"
             autoComplete="off"
-            placeholder="+14155550123"
+            placeholder="90000 00001"
             value={patientPhone}
             aria-describedby="patient-mobile-help"
             onChange={(event) => setPatientPhone(event.target.value)}
           />
         </label>
         <p id="patient-mobile-help" className={`${styles.muted} ${styles.mobileHint}`}>
-          Use a synthetic number. No patient data is loaded on this page.
+          Enter a synthetic 10-digit Indian mobile number. No patient data is loaded on this page.
         </p>
         <label className={styles.checkbox}>
           <input
@@ -173,7 +173,7 @@ export function SharingPreview() {
             <option value="">Choose a doctor</option>
             {doctors.map((doctor) => (
               <option disabled={!doctor.active} key={doctor.id} value={doctor.id}>
-                {doctor.displayName} · {doctor.phoneE164}
+                {doctor.displayName} · {formatIndianMobile(doctor.phoneE164)}
                 {doctor.active ? "" : " · inactive"}
               </option>
             ))}
@@ -184,7 +184,7 @@ export function SharingPreview() {
             <li key={doctor.id}>
               <span className={styles.doctorName}>
                 <strong>{doctor.displayName}</strong>
-                <small>{doctor.phoneE164}</small>
+                <small>{formatIndianMobile(doctor.phoneE164)}</small>
               </span>
               <button
                 className={styles.buttonSecondary}
@@ -203,7 +203,9 @@ export function SharingPreview() {
           ))}
         </ul>
         {selectedDoctor && (
-          <p className={styles.muted}>Selected phone: {selectedDoctor.phoneE164}</p>
+          <p className={styles.muted}>
+            Selected phone: {formatIndianMobile(selectedDoctor.phoneE164)}
+          </p>
         )}
         <label className={styles.checkbox}>
           <input
@@ -227,8 +229,8 @@ export function SharingPreview() {
         </div>
         <p className={styles.feedback} aria-live="polite">
           {includePatient &&
-            (!e164.test(patientPhone)
-              ? "Enter a valid E.164 patient mobile to include it in the preview. "
+            (!normalizeIndianMobile(patientPhone)
+              ? "Enter a valid Indian mobile number to include it in the preview. "
               : "Patient recipient selected. ")}
           {includeDoctor &&
             (!selectedDoctor?.active
@@ -292,12 +294,12 @@ export function SharingPreview() {
             />
           </label>
           <label className={styles.field}>
-            Doctor phone (E.164)
+            Doctor mobile
             <input
               required
               type="tel"
               inputMode="tel"
-              placeholder="+14155550123"
+              placeholder="90000 00001"
               value={newDoctorPhone}
               onChange={(event) => setNewDoctorPhone(event.target.value)}
             />
@@ -306,7 +308,7 @@ export function SharingPreview() {
             className={styles.buttonSecondary}
             disabled={
               !newDoctorName.trim() ||
-              !e164.test(newDoctorPhone) ||
+              !normalizeIndianMobile(newDoctorPhone) ||
               (sharedMatches.length > 0 && !confirmSharedPhone)
             }
             type="submit"

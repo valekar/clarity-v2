@@ -1,23 +1,45 @@
 # Active V2 plan
 
-| Plan                                           | Status                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Next step                                                                                                               |
-| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| [01 — Clarity V2](01-final-clarity-v2-plan.md) | Fifteen-migration isolated database and cloud restore, synthetic device-to-Ready ingestion, separate-source compiled service activation, multipart recovery, revision-2 late arrival, Hanko staff access, scoped viewer routes, and worker crash proofs passed. An earlier OHIF snapshot passed strict synthetic pixels at 1280×900. New bounded viewer compatibility states pass focused tests but lack a passing browser rerun; a compiled-service crash harness also awaits connected verification. Docker BuildKit/overlay I/O errors now block disposable integration runs. Installed OS service and sharing release remain pending. | Recover Docker storage without disturbing other workloads; rerun viewer and crash proofs; then modality/codec, mobile viewer and pilot breadth. |
+| Plan                                           | Status                                                                                                                                                                                                                                                                                                                                                                                | Next step                                                                                                                                                                                         |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [01 — Clarity V2](01-final-clarity-v2-plan.md) | Synthetic separate-source Orthanc → compiled service → cloud Ready and two SIGKILL recovery points passed in a disposable Docker stack. The interactive Electron profile signed in through Hanko, tested and saved local Orthanc settings, and admitted two CTs to Ready; the second arrived on the five-minute poll after Electron exited. Native OS service lifecycle, packaged cross-OS app, clinical breadth, signed installers and external sharing remain open. | Prove installed macOS/Windows service continuity and packaged desktop acceptance; gather real-centre inputs only when approved. |
 
-On 24 September, the workspace added an OHIF startup/retry state, local CT/MR/SR/PDF
-fixtures, a second compiled-service crash/restart checkpoint, a bounded synthetic
-dispatch tick, Windows automatic-start descriptor checks, and fenced source-health
-reporting with a staff status panel. The new source-health migration passed an
-isolated PostgreSQL 15 proof, not the connected PostgreSQL 18 stack. A local
-compiled-process SIGKILL proof now covers lost cloud admission response and
-source-local queue-lease recovery. Migration 0017 passed a separate bounded
-uncertain-dispatch rotation and role-denial proof on PostgreSQL 15. Docker
-BuildKit still fails before service startup; no new connected viewer or crash
-result is claimed. The plan has 7 of 28 task boxes checked. Sharing stays blocked
-until OI-06 recipient verification is decided and accepted.
+The 24 September desktop clarification is in plan version 1.4 as BR-08/09/10,
+TR-13/14/15 and tasks P2.4/P3.5. Hanko owns sign-in and account creation;
+Clarity's active database membership grants staff access. The web root now
+routes to sign-in instead of the inert preview, and the protected staff pages
+use left navigation. The administrator's bundled local Settings page is now
+loaded inside the existing Electron window; it uses a fresh authorized bridge
+to test and save a loopback Orthanc source without exposing credentials to the
+hosted page. The earlier pop-up proof is superseded by this
+[in-window revision](evidence/42-in-window-source-settings.md); the native
+synthetic Settings → source form → Settings round trip, test and save passed. A
+[disposable interactive run](evidence/41-interactive-synthetic-desktop-demo.md)
+reached Ready twice, including a five-minute poll after Electron quit, and the
+source-health panel changed to Healthy. The plan has
+**7 of 30** task boxes checked; P2.4/P3.5 remain open for installed macOS and
+Windows proof and service lifecycle.
+Plan version 1.5 adds BR-11 for Indian mobile entry and display in the doctor
+directory. The [synthetic doctor UI correction](evidence/43-indian-doctor-directory-ui.md)
+styles the add/search page, loads the first 20 doctors without a search term,
+and shows Indian-formatted numbers. P6.2 stays open for recipient policy,
+verified sharing, QR and final Send.
+Plan version 1.6 adds BR-12 for native operating-system window controls. The
+[desktop window controls proof](evidence/44-desktop-window-controls.md)
+tracks the framed Electron window and removal of the duplicate in-page actions;
+P2.4 remains open for packaged macOS/Windows acceptance.
+The running synthetic service also refreshed source health and its cloud lease
+each minute between five-minute Orthanc polls, so the UI does not go stale
+solely because the configured discovery interval exceeds two minutes.
 
-The existing V1 plans are historical/reference evidence, not V2's execution queue.
-The [planning session](../map/sessions/2026-09-23-v2-planning.md),
-[foundation session](../map/sessions/2026-09-23-v2-scaffold.md) and
-[implementation session](../map/sessions/2026-09-23-v2-implementation-start.md)
-own dated evidence.
+The prior Docker BuildKit issue cleared. A disposable
+`CLARITY_COMPILED_SYNC_PROOF=1` run completed the separate-source compiled
+service crash/recovery and cloud restore checks. See
+[connected crash evidence](evidence/33-compiled-sync-crash-recovery.md). This
+proof does not install a native OS service or establish a real centre connection.
+
+Synthetic-only integration remains the approved scope. Clinic OS/Orthanc details,
+production cloud/service credentials, signing and recipient policy are still
+release inputs. External Generate and send stays unavailable until OI-06 recipient
+verification and delivery gates are accepted. The existing V1 plans remain
+historical reference material, not V2's execution queue.

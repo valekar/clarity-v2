@@ -25,6 +25,10 @@ export function validPhoneE164(value: string): boolean {
   return /^\+[1-9][0-9]{7,14}$/.test(value);
 }
 
+export function validIndianMobileE164(value: string): boolean {
+  return /^\+91[6-9][0-9]{9}$/.test(value);
+}
+
 export function decideDoctorCreation(
   input: Readonly<{
     normalizedName: string;

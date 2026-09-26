@@ -28,7 +28,7 @@ test("parses bounded source status and labels healthy as last-reported reachabil
   assert.equal(result.items.length, 1);
   assert.equal(
     sourceHealthMessage(result.items[0]!),
-    "Source and cloud were reachable at the last report.",
+    "The source was reachable at last sync; the cloud is responding.",
   );
 });
 

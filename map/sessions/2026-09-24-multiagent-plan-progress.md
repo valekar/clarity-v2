@@ -21,7 +21,10 @@ and a staff source-status panel. A second pass verified existing Studies keyset
 pagination, added durable rotation of uncertain dispatch rows without delivery
 grants, fixed local queue-lease recovery after a compiled-service SIGKILL, and
 proved atomic spool cleanup/retry after injected partial-write and rename
-failures.
+failures. A proof-only runner then exercised the real dispatch repository,
+synthetic worker, provider reconciliation and signed callback on an isolated
+PostgreSQL 15 database with migrations 0001–0017; its fixture transaction was
+rolled back, so committed restart/concurrency behavior remains unproved.
 The [operational status](../../docs/operational-status.md)
 now records runnable synthetic procedures and release gates.
 
@@ -47,13 +50,16 @@ cannot clear a live owner's local queue lease. Separate spool tests proved an
 injected ENOSPC after a partial write, a failed rename and an invalid writer
 count leave no artifact or SQLite upload row; reopening and retrying preserved
 the expected bytes and SHA-256.
+The full-chain PostgreSQL 15 dispatch proof passed with one callback event
+after replay and an unchanged second `blocked_policy` row.
+
 Whole-repository type, lint, format, source-policy and map checks passed after
 the parallel changes. A sync-service test exposed that a health telemetry
 failure could fail a successful sync iteration; the report is now best effort
 and retried on the next iteration. A separate uploader fixture could trigger
 its simulated lease takeover before the intended signed PUT under load; the
-fixture now waits for the PUT. The sync-service package passed all 70 tests,
-and the final repository-wide Turbo test run passed 16 of 16 tasks.
+fixture now waits for the PUT. The final repository-wide Turbo test run passed
+16 of 16 tasks, including 73 sync-service tests.
 `pnpm run check` and `git diff --check` also passed after map regeneration.
 
 The fresh connected proof stopped before startup because Docker BuildKit

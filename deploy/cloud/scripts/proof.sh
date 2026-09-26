@@ -14,6 +14,19 @@ viewer_proof="${CLARITY_VIEWER_PROOF:-0}"
 viewer_browser_diagnostic="${CLARITY_VIEWER_BROWSER_DIAGNOSTIC:-0}"
 viewer_browser_hold="${CLARITY_VIEWER_BROWSER_HOLD_SECONDS:-0}"
 compiled_sync_proof="${CLARITY_COMPILED_SYNC_PROOF:-0}"
+interactive_synthetic_demo="${CLARITY_INTERACTIVE_SYNTHETIC_DEMO:-0}"
+demo_state_dir="${CLARITY_SYNTHETIC_DEMO_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/clarity-v2/synthetic-demo}"
+if [[ "$interactive_synthetic_demo" == 1 ]]; then
+  viewer_proof=1
+  compiled_sync_proof=1
+  if [[ -L "$demo_state_dir" ]]; then
+    echo "Synthetic demo state directory cannot be a symlink: $demo_state_dir" >&2
+    exit 1
+  fi
+  mkdir -p "$demo_state_dir"
+  chmod 700 "$demo_state_dir"
+  demo_state_dir="$(cd "$demo_state_dir" && pwd -P)"
+fi
 multipart_recovery_proof="${CLARITY_MULTIPART_RECOVERY_PROOF:-0}"
 if [[ "$viewer_proof" == 1 || "$viewer_browser_diagnostic" == 1 ]]; then
   viewer_proof=1
@@ -28,6 +41,11 @@ if [[ "$compiled_sync_proof" == 1 ]]; then
 fi
 if [[ "$multipart_recovery_proof" == 1 ]]; then
   app_proof=1
+fi
+if [[ "$interactive_synthetic_demo" == 1 ]]; then
+  # The interactive run creates and ingests its own source after Settings Save.
+  # Its staff account still needs the Hanko enrollment/bootstrap above.
+  connected_proof=0
 fi
 port() { python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()'; }
 
@@ -210,7 +228,7 @@ compose() {
 
 finish() {
   local status=$?
-  if [[ "$status" -ne 0 ]]; then
+  if [[ "$status" -ne 0 && ("$interactive_synthetic_demo" != 1 || ("$status" != 130 && "$status" != 143)) ]]; then
     echo 'Cloud proof failed; relevant service logs follow.' >&2
     compose "$project" logs --no-color --tail 100 postgres clarity-migrate hanko-migrate hanko minio minio-init orthanc >&2 || true
     compose "$restore_project" logs --no-color --tail 80 postgres hanko orthanc minio >&2 || true
@@ -476,7 +494,7 @@ if [[ "$connected_proof" == 1 ]]; then
   echo "Connected synthetic device-to-Ready proof passed; private fixture: $proof_dir/connected-ingestion.json"
 fi
 
-if [[ "$viewer_proof" == 1 ]]; then
+if [[ "$viewer_proof" == 1 && "$interactive_synthetic_demo" != 1 ]]; then
   python3 "$cloud_dir/scripts/prove-staff-web.py" verify \
     "http://localhost:$web_port" "http://localhost:$hanko_port" \
     "$proof_dir/viewer-admin.json" "$proof_dir/viewer-staff.json" \
@@ -507,10 +525,28 @@ if [[ "$compiled_sync_proof" == 1 ]]; then
   CLARITY_WEB_URL="http://127.0.0.1:$web_port" \
   CLARITY_PROOF_CLOUD_ORTHANC_URL="http://127.0.0.1:$orthanc_port/" \
   CLARITY_PROOF_RESULT_FILE="$proof_dir/compiled-sync-service.json" \
+  CLARITY_INTERACTIVE_SYNTHETIC_DEMO="$interactive_synthetic_demo" \
+  CLARITY_SYNC_CONFIG_PATH="${CLARITY_SYNC_CONFIG_PATH:-$demo_state_dir/sync-service.json}" \
+  CLARITY_SYNTHETIC_DEMO_MANIFEST="$demo_state_dir/demo.json" \
+  CLARITY_SYNTHETIC_DEMO_ADMIN="$proof_dir/viewer-admin.json" \
+  CLARITY_SYNTHETIC_DEMO_STAFF="$proof_dir/viewer-staff.json" \
+  CLARITY_SYNTHETIC_DEMO_DASHBOARD_URL="http://localhost:$web_port" \
+  CLARITY_SYNTHETIC_DEMO_HANKO_URL="http://localhost:$hanko_port" \
+  CLARITY_SYNTHETIC_DEMO_MAILPIT_URL="http://localhost:$mailpit_port" \
+  CLARITY_SYNTHETIC_DEMO_ELECTRON="$interactive_synthetic_demo" \
+  CLARITY_SYNC_CONFIG_WRITER="$repo_root/apps/sync-service/dist/main.js" \
+  CLARITY_NODE_EXECUTABLE="$(command -v node)" \
   ORTHANC_HTTP_USERNAME=proof \
   ORTHANC_HTTP_PASSWORD="$ORTHANC_HTTP_PASSWORD" \
   node "$cloud_dir/scripts/prove-compiled-sync-service.mjs"
-  echo 'Compiled sync-service discovered a separate synthetic Orthanc source and reached cloud Ready.'
+  if [[ "$interactive_synthetic_demo" != 1 ]]; then
+    echo 'Compiled sync-service discovered a separate synthetic Orthanc source and reached cloud Ready.'
+  fi
+fi
+
+if [[ "$interactive_synthetic_demo" == 1 ]]; then
+  echo 'Interactive synthetic demo stopped. Removing its disposable Docker project and volumes.'
+  exit 0
 fi
 
 if [[ "$viewer_browser_hold" != 0 ]]; then

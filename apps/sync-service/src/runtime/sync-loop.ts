@@ -6,7 +6,7 @@ import type { OrthancDiscoveryClient } from "../orthanc/discovery-client.js";
 import type { OrthancChangeFeedAdapter } from "../orthanc/change-feed.js";
 import type { CheckpointStore } from "../persistence/checkpoint-store.js";
 import { DiscoveryQueueProcessor } from "../discovery/queue-processor.js";
-import { IngestionClient } from "../transfers/ingestion-client.js";
+import { IngestionClient, UploadApiError } from "../transfers/ingestion-client.js";
 import { InstanceUploader } from "../transfers/instance-uploader.js";
 import { recoverReceivedUpload } from "../transfers/received-recovery.js";
 import {
@@ -24,6 +24,27 @@ export function classifySyncFailure(error: unknown) {
   });
 }
 
+export function nextPollDelayMs(pollIntervalMs: number, failures: number): number {
+  return Math.min(pollIntervalMs * 2 ** failures, 60 * 60_000);
+}
+
+function waitForDelayOrAbort(delayMs: number, signal: AbortSignal): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (signal.aborted) return resolve(false);
+    let settled = false;
+    const finish = (continued: boolean): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      signal.removeEventListener("abort", abort);
+      resolve(continued);
+    };
+    const abort = (): void => finish(false);
+    const timer = setTimeout(() => finish(true), delayMs);
+    signal.addEventListener("abort", abort, { once: true });
+  });
+}
+
 export interface SyncLoopOptions {
   sourceKey: string;
   spoolDirectory: string;
@@ -33,6 +54,7 @@ export interface SyncLoopOptions {
   uploadBatchSize: number;
   pollIntervalMs: number;
   reconciliationIntervalMs: number;
+  idleHealthIntervalMs?: number;
   onDiagnostic?: (message: string) => void;
 }
 
@@ -57,6 +79,7 @@ export class SyncLoop {
   #stableObservedAt: string | null = null;
   #manifestCursor = "";
   #lastSuccessfulSyncAt: string | null = null;
+  #sourceReachable = true;
   #lastErrorCode:
     "orthanc_unavailable" | "low_spool_space" | "source_changed" | "sync_failed" | null = null;
   #uploadCursor: string | null = null;
@@ -87,6 +110,14 @@ export class SyncLoop {
     }
     if (options.pollIntervalMs < 250 || options.reconciliationIntervalMs < options.pollIntervalMs) {
       throw new Error("sync intervals are invalid or unbounded");
+    }
+    if (
+      options.idleHealthIntervalMs !== undefined &&
+      (!Number.isSafeInteger(options.idleHealthIntervalMs) ||
+        options.idleHealthIntervalMs < 10 ||
+        options.idleHealthIntervalMs > 60_000)
+    ) {
+      throw new Error("idle health interval must be between 10 and 60000 milliseconds");
     }
     this.#store = store;
     this.#feed = feed;
@@ -140,16 +171,20 @@ export class SyncLoop {
     }
     await this.#admitDiscoveredBatch();
     if (this.#stableGeneration !== null) await this.#publishStableManifests();
+    this.#sourceReachable = true;
     this.#lastSuccessfulSyncAt = new Date(now).toISOString();
     try {
       await this.#publishHealth();
-    } catch {
-      this.#diagnostic("Source health report failed; retry scheduled on the next sync iteration");
+    } catch (error) {
+      const status = error instanceof UploadApiError ? ` (HTTP ${error.status})` : "";
+      this.#diagnostic(
+        `Source health report failed${status}; retry scheduled on the next sync iteration`,
+      );
     }
   }
 
   async #publishHealth(
-    sourceReachable = true,
+    sourceReachable = this.#sourceReachable,
     errorCode?: "orthanc_unavailable" | "low_spool_space" | "source_changed" | "sync_failed",
   ): Promise<void> {
     if (typeof this.#cloud.reportHealth !== "function") return;
@@ -172,7 +207,7 @@ export class SyncLoop {
     }
     const lowSpace = spoolFreeBytes !== null && spoolFreeBytes <= this.#options.reserveFreeBytes;
     const lastErrorCode = lowSpace ? "low_spool_space" : (errorCode ?? this.#lastErrorCode);
-    await this.#cloud.reportHealth({
+    const report = {
       sourceReachable,
       syncState: lastErrorCode
         ? "attention"
@@ -184,7 +219,8 @@ export class SyncLoop {
       spoolFreeBytes,
       spoolCapacityBytes,
       lastSuccessfulSyncAt: this.#lastSuccessfulSyncAt,
-    });
+    } as const;
+    await this.#cloud.reportHealth(report);
     this.#lastErrorCode = lowSpace ? "low_spool_space" : null;
   }
 
@@ -328,28 +364,41 @@ export class SyncLoop {
         failures = 0;
       } catch (error) {
         const failure = classifySyncFailure(error);
+        if (error instanceof OrthancUnavailableError) this.#sourceReachable = false;
         this.#lastErrorCode = failure.lastErrorCode;
         try {
-          await this.#publishHealth(failure.sourceReachable, failure.lastErrorCode);
+          await this.#publishHealth(this.#sourceReachable, failure.lastErrorCode);
         } catch {
           // A cloud outage prevents recording the source outage; the server marks the prior row stale.
         }
         failures = Math.min(failures + 1, 7);
         this.#diagnostic("Sync iteration failed; retry scheduled");
       }
-      const delay = Math.min(this.#options.pollIntervalMs * 2 ** failures, 60_000);
-      await new Promise<void>((resolve) => {
-        const onAbort = (): void => {
-          clearTimeout(timer);
-          finish();
-        };
-        const finish = (): void => {
-          signal.removeEventListener("abort", onAbort);
-          resolve();
-        };
-        const timer = setTimeout(finish, delay);
-        signal.addEventListener("abort", onAbort, { once: true });
-      });
+      const delay = nextPollDelayMs(this.#options.pollIntervalMs, failures);
+      await this.#waitUntilNextPoll(delay, signal);
+    }
+  }
+
+  async #waitUntilNextPoll(delayMs: number, signal: AbortSignal): Promise<void> {
+    const heartbeatInterval = this.#options.idleHealthIntervalMs ?? 60_000;
+    const pollAt = Date.now() + delayMs;
+    let heartbeatAt = Date.now() + heartbeatInterval;
+
+    while (!signal.aborted) {
+      const wakeAt = Math.min(pollAt, heartbeatAt);
+      const elapsed = wakeAt - Date.now();
+      if (elapsed > 0 && !(await waitForDelayOrAbort(elapsed, signal))) return;
+      if (signal.aborted || Date.now() >= pollAt) return;
+
+      try {
+        // Refresh cloud health and its lease without querying Orthanc or
+        // moving any inventory/feed cursor during the configured poll wait.
+        await this.#publishHealth(this.#sourceReachable);
+      } catch (error) {
+        const status = error instanceof UploadApiError ? ` (HTTP ${error.status})` : "";
+        this.#diagnostic(`Idle source health heartbeat failed${status}; retry scheduled`);
+      }
+      heartbeatAt = Date.now() + heartbeatInterval;
     }
   }
 

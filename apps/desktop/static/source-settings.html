@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; font-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <title>Settings · Orthanc connection — Clarity V2</title>
+    <style>
+      :root {
+        font:
+          15px/1.5 Inter,
+          ui-sans-serif,
+          system-ui,
+          sans-serif;
+        color: #182943;
+        background: #f4f7fb;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+      }
+      main {
+        width: min(calc(100% - 240px), 840px);
+        margin: 0 0 0 208px;
+        padding: 30px 28px 42px;
+      }
+      .side {
+        position: fixed;
+        inset: 0 auto 0 0;
+        display: flex;
+        width: 208px;
+        flex-direction: column;
+        gap: 6px;
+        padding: 32px 13px;
+        border-right: 1px solid #e1e7ee;
+        background: white;
+      }
+      .side-title {
+        padding: 7px 13px 23px;
+        color: #244f7b;
+        font-size: 0.8rem;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+      }
+      .side button {
+        width: 100%;
+        padding: 12px 14px;
+        border: 0;
+        border-radius: 9px;
+        background: transparent;
+        color: #52657a;
+        text-align: left;
+        font-size: 0.9rem;
+        font-weight: 650;
+      }
+      .side button[aria-current="page"] {
+        background: #eaf2fb;
+        color: #1e5a95;
+      }
+      .side button:hover {
+        background: #f1f6fc;
+      }
+      .back {
+        margin: 0 0 18px;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: #1e5a95;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .back:hover {
+        text-decoration: underline;
+      }
+      .brand {
+        color: #5279a8;
+        font-size: 0.82rem;
+        font-weight: 750;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+      h1 {
+        margin: 4px 0 6px;
+        font-size: 2rem;
+        letter-spacing: -0.04em;
+      }
+      .intro {
+        color: #64758c;
+        margin: 0 0 20px;
+      }
+      form,
+      .status {
+        border: 1px solid #dce5f0;
+        border-radius: 16px;
+        background: white;
+        padding: 24px;
+      }
+      label {
+        display: block;
+        margin: 16px 0 5px;
+        font-weight: 650;
+      }
+      input,
+      select {
+        width: 100%;
+        padding: 11px 12px;
+        border: 1px solid #cbd7e5;
+        border-radius: 9px;
+        color: #182943;
+        font: inherit;
+        background: white;
+      }
+      input:focus,
+      select:focus {
+        outline: 3px solid #b9d2f4;
+        border-color: #5279a8;
+      }
+      small {
+        display: block;
+        color: #718198;
+        margin-top: 5px;
+      }
+      .buttons {
+        display: flex;
+        gap: 10px;
+        margin-top: 22px;
+      }
+      button {
+        border: 0;
+        border-radius: 9px;
+        background: #334e72;
+        color: white;
+        padding: 11px 16px;
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      button.secondary {
+        color: #334e72;
+        background: #e9eff6;
+      }
+      button:disabled {
+        opacity: 0.65;
+        cursor: wait;
+      }
+      #message {
+        min-height: 1.5em;
+        margin: 12px 0 0;
+        color: #8c4435;
+      }
+      #message[data-kind="good"] {
+        color: #28654c;
+      }
+      .status {
+        margin-top: 14px;
+        padding: 14px 18px;
+        color: #64758c;
+      }
+      .status strong {
+        color: #182943;
+      }
+      @media (max-width: 700px) {
+        .side {
+          position: static;
+          width: 100%;
+          flex-direction: row;
+          flex-wrap: wrap;
+          padding: 8px;
+          border-right: 0;
+          border-bottom: 1px solid #e1e7ee;
+        }
+        .side-title {
+          display: none;
+        }
+        .side button {
+          width: auto;
+        }
+        main {
+          width: 100%;
+          margin: 0;
+          padding: 22px 16px 30px;
+        }
+        .buttons {
+          flex-direction: column;
+        }
+        .buttons button {
+          width: 100%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="side" aria-label="Staff sections">
+      <span class="side-title">CLARITY V2</span>
+      <button type="button" data-section="studies">Studies</button>
+      <button type="button" data-section="doctors">Doctors</button>
+      <button type="button" data-section="settings" aria-current="page">Settings</button>
+    </nav>
+    <main>
+      <button class="back" type="button" data-section="settings">← Back to Settings</button>
+      <div class="brand">Settings · This computer</div>
+      <h1>Orthanc connection</h1>
+      <p class="intro">
+        Connect this device to the local Orthanc REST API. Credentials stay on this computer.
+      </p>
+      <form id="settings">
+        <label for="url">Orthanc REST address</label>
+        <input
+          id="url"
+          name="orthancUrl"
+          type="url"
+          autocomplete="url"
+          placeholder="http://127.0.0.1:8042"
+          required
+        />
+        <small>In this demo, HTTP is limited to the local computer.</small>
+        <label for="username">Orthanc username</label>
+        <input id="username" name="username" autocomplete="username" />
+        <label for="password">Orthanc password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" />
+        <small>Leave credentials blank to keep the saved credentials for the same server.</small>
+        <label for="interval">Check for new studies</label>
+        <select id="interval" name="pollIntervalMinutes">
+          <option value="5">Every 5 minutes</option>
+          <option value="10">Every 10 minutes</option>
+          <option value="15">Every 15 minutes</option>
+          <option value="30">Every 30 minutes</option>
+          <option value="60">Every 60 minutes</option>
+        </select>
+        <div class="buttons">
+          <button class="secondary" id="test" type="button">Test connection</button>
+          <button id="save" type="submit">Save connection</button>
+        </div>
+        <p id="message" role="status" aria-live="polite"></p>
+      </form>
+      <div class="status" id="status" aria-live="polite"><strong>Checking settings…</strong></div>
+    </main>
+    <script>
+      const form = document.querySelector("#settings");
+      const url = document.querySelector("#url");
+      const username = document.querySelector("#username");
+      const password = document.querySelector("#password");
+      const interval = document.querySelector("#interval");
+      const testButton = document.querySelector("#test");
+      const saveButton = document.querySelector("#save");
+      const message = document.querySelector("#message");
+      const status = document.querySelector("#status");
+      function payload() {
+        return { orthancUrl: url.value.trim(), username: username.value, password: password.value };
+      }
+      function explain(error) {
+        return (
+          {
+            admin_required:
+              "Your Clarity admin session is unavailable. Sign in as an active administrator and reopen Settings.",
+            source_identity_change:
+              "Changing the Orthanc server requires a new source pairing and reconciliation.",
+            connection_failed:
+              "Could not verify Orthanc. Check the address and credentials, then try again.",
+            unavailable: "Local sync settings are unavailable on this installation.",
+            save_failed: "Could not save settings. The previous settings are still in place.",
+            invalid_settings: "Check the address and credentials.",
+          }[error] || "Could not complete this action. Check the connection and try again."
+        );
+      }
+      async function run(button, operation) {
+        button.disabled = true;
+        message.dataset.kind = "";
+        message.textContent = operation === "test" ? "Testing Orthanc…" : "Saving settings…";
+        try {
+          const result =
+            operation === "test"
+              ? await window.claritySourceSettings.test(payload())
+              : await window.claritySourceSettings.save({
+                  ...payload(),
+                  pollIntervalMinutes: Number(interval.value),
+                });
+          if (!result?.ok) throw new Error(result?.error || "unavailable");
+          message.dataset.kind = "good";
+          message.textContent =
+            operation === "test"
+              ? "Orthanc responded successfully."
+              : "Connection saved. New studies will be checked on the selected schedule.";
+          if (operation === "save") {
+            password.value = "";
+            username.value = "";
+            await refresh();
+          }
+        } catch (error) {
+          message.textContent = explain(error instanceof Error ? error.message : "unavailable");
+        } finally {
+          button.disabled = false;
+        }
+      }
+      async function refresh() {
+        const result = await window.claritySourceSettings.read();
+        if (!result?.ok) {
+          status.innerHTML =
+            "<strong>Settings unavailable</strong><br>Sign in as a Clarity administrator and check that local sync is available.";
+          message.textContent = explain(result?.error || "unavailable");
+          return;
+        }
+        const item = result.settings;
+        url.value = item.orthancUrl;
+        interval.value = String(item.pollIntervalMinutes);
+        status.innerHTML = item.configured
+          ? "<strong>Connected settings saved</strong><br>" +
+            (item.syntheticFastPolling
+              ? "Synthetic demo is checking every 5 seconds. Saving a setting below switches to the selected minute interval."
+              : "Orthanc is checked every " + item.pollIntervalMinutes + " minutes.") +
+            " Password is stored privately on this computer."
+          : "<strong>Not connected</strong><br>Enter the synthetic Orthanc address and credentials, then test and save.";
+      }
+      testButton.addEventListener("click", () => run(testButton, "test"));
+      document.querySelectorAll("[data-section]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          const result = await window.claritySourceSettings.navigate(button.dataset.section);
+          if (!result?.ok) message.textContent = "Could not navigate. Please try again.";
+        });
+      });
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        run(saveButton, "save");
+      });
+      refresh().catch(() => {
+        status.innerHTML =
+          "<strong>Settings unavailable</strong><br>Could not read local sync settings.";
+      });
+    </script>
+  </body>
+</html>

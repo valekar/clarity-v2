@@ -75,6 +75,10 @@ const { createDoctorPool, createDoctorRepository } = await import(
 const repo = createDoctorRepository(createDoctorPool(process.env.DOCTOR_PROOF_URL));
 const actorStaffUserId = '10000000-0000-4000-8000-000000000001';
 try {
+  await assert.rejects(() => repo.create({
+    displayName: 'Dr. US Example', phoneE164: '+14155550123',
+    confirmedSharedPhone: false, actorStaffUserId,
+  }), TypeError);
   const first = await repo.create({
     displayName: '  Dr. Ada   Rao ', phoneE164: '+919876543210',
     confirmedSharedPhone: false, actorStaffUserId,
@@ -100,12 +104,14 @@ try {
   assert.equal(confirmed.outcome, 'created');
   assert.equal((await repo.search('ada')).length, 1);
   assert.equal((await repo.search('+919876543210')).length, 2);
+  assert.equal((await repo.search('+91 98765 43210')).length, 2);
+  assert.equal((await repo.search('')).length, 2);
   const race = await Promise.all([
     repo.create({ displayName: 'Dr. Cee', phoneE164: '+919876543211', confirmedSharedPhone: false, actorStaffUserId }),
     repo.create({ displayName: 'Dr. Dee', phoneE164: '+919876543211', confirmedSharedPhone: false, actorStaffUserId }),
   ]);
   assert.deepEqual(race.map((result) => result.outcome).sort(), ['confirm_shared_phone', 'created']);
-  console.log('Doctor directory proof passed: exact retry, shared-phone confirmation, search and concurrent first insert.');
+  console.log('Doctor directory proof passed: exact retry, shared-phone confirmation, populated default list, search and concurrent first insert.');
 } finally {
   await repo.close();
 }

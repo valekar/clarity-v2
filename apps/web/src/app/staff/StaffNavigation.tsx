@@ -1,11 +1,12 @@
 import Link from "next/link";
-import styles from "./study-dashboard.module.css";
+import "./staff-navigation.css";
 
 type StaffSection = "studies" | "doctors" | "settings";
 
 export function StaffNavigation({ current }: { current?: StaffSection }) {
   return (
-    <nav className={styles.nav} aria-label="Staff sections">
+    <nav className="staff-side-navigation" aria-label="Staff sections">
+      <span className="staff-side-navigation-title">CLARITY V2</span>
       <Link href="/staff" aria-current={current === "studies" ? "page" : undefined}>
         Studies
       </Link>

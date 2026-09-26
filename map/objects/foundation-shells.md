@@ -4,8 +4,8 @@ type: object
 title: Buildable application shells and workspace packages
 universe: live
 status: verified
-updated: 2026-09-23
-revision: application-overlay-and-workspaces-2026-09-23
+updated: 2026-09-24
+revision: native-desktop-window-frame-2026-09-24
 ---
 
 # Buildable application shells and workspace packages
@@ -33,6 +33,9 @@ or a fixed hosted `/sign-in` route with a persistent staff partition and exact
 dashboard/Hanko origin allowlist when configured. Its sandboxed renderer has
 no Node or general preload bridge, with
 [focused navigation tests](../../docs/evidence/17-desktop-hosted-auth-shell.md).
+The desktop keeps Electron's [native framed BrowserWindow](../../apps/desktop/src/main.ts)
+with standard OS close, minimize and zoom/maximize controls. The duplicate
+in-page actions were removed after the user's [native-control correction](../../docs/evidence/44-desktop-window-controls.md).
 The normal [sync entry](../../apps/sync-service/src/main.ts)
 exits explicitly without work; a [synthetic process entry](../../apps/sync-service/src/synthetic-main.ts)
 exercises local discovery. The [worker entry](../../apps/worker/src/main.ts)

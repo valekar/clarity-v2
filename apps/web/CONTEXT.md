@@ -1,8 +1,26 @@
-# Hosted staff web shell
+# Hosted Clarity staff application
 
-Input: browser request and the shared UI brand. Output: a static Next.js staff
-workflow preview with Studies/Doctors/Settings and a synthetic sharing form. It
-has no patient data, authentication, API, messaging or viewer yet. This is the
-future staff dashboard and cloud API owner. Build/typecheck with package scripts.
-The disabled send action and sample doctor entries are UI evidence only, not
-proof of Hanko or clinical access.
+Input: Hanko session cookie and the dedicated V2 cloud services. Output:
+authorization-checked staff pages and scoped APIs. `/` redirects to `/sign-in`;
+Hanko owns authentication, while current Clarity PostgreSQL membership grants
+staff/admin access. New Hanko registrations have no workspace access until an
+administrator grants a membership.
+
+Protected Studies, Doctors and Settings use left navigation. Doctors lists and
+searches active directory entries and accepts Indian mobile numbers in its
+synthetic add form; the API stores canonical +91 E.164. See the
+[doctor UI proof](../../docs/evidence/43-indian-doctor-directory-ui.md).
+Studies query fenced source-backed Reports and open the scoped DICOMweb viewer. Settings shows
+staff access controls to admins and offers a named Electron request to navigate
+within the same window to bundled local Orthanc configuration. The hosted page
+does not receive source credentials; an ordinary browser cannot configure a
+workstation. The separate
+sharing preview has no final Send until recipient policy and provider gates
+are accepted.
+
+The app is not a local desktop backend. Electron hosts these pages when its
+trusted dashboard/Hanko origins are configured. The current source and viewer
+paths have synthetic proofs; installed service, clinical breadth and recipient
+release acceptance are separate plan gates. See
+[active plan](../../docs/ACTIVE.md) and
+[desktop clarification](../../map/sessions/2026-09-24-desktop-onboarding-source-settings.md).

@@ -5,7 +5,7 @@ title: Recipient delivery and verification boundary
 universe: ghost
 status: stub
 updated: 2026-09-24
-revision: synthetic-dispatch-tick-callback-proof-2026-09-24
+revision: indian-doctor-directory-ui-2026-09-24
 ---
 
 # Recipient delivery and verification boundary
@@ -26,7 +26,9 @@ delivery, so retry must reconcile first.
 The [plan](../../docs/01-final-clarity-v2-plan.md#37-sharing-viewing-and-release-restraint)
 owns the policy and release gates. A [doctor directory](../../docs/evidence/23-doctor-directory.md)
 and pure [dispatch decision](../../libs/domain/src/dispatch.ts) exist for
-staff-side groundwork. The [synthetic provider](../../libs/messaging/src/synthetic-provider.ts)
+staff-side groundwork. Its [Indian mobile UI](../../docs/evidence/43-indian-doctor-directory-ui.md)
+accepts and displays +91 doctor contacts but does not verify ownership or
+enable delivery. The [synthetic provider](../../libs/messaging/src/synthetic-provider.ts)
 and [test](../../docs/evidence/24-synthetic-messaging.md) prove idempotent
 acceptance and lost-reply reconciliation without network effects. Migration
 [0014](../../libs/database/migrations/0014_dispatch_outbox.sql) adds immutable

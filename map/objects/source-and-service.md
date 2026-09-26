@@ -2,10 +2,10 @@
 id: source-and-service
 type: object
 title: Private source and synchronization service
-universe: ghost
-status: stub
+universe: live
+status: verified
 updated: 2026-09-24
-revision: source-health-fenced-report-2026-09-24
+revision: in-window-source-settings-2026-09-24
 ---
 
 # Private source and synchronization service
@@ -13,8 +13,9 @@ revision: source-health-fenced-report-2026-09-24
 ## Purpose
 
 The compiled service reads a private Orthanc source and transfers new study
-data outbound. Installation as an independently managed OS service and its
-Electron configuration/status surface remain proposed.
+data outbound. Its administrator-only Electron configuration ran against a
+disposable synthetic source; installation as an independently managed OS
+service remains open.
 
 ## Why this shape
 
@@ -48,6 +49,25 @@ and exact-byte retry; native filesystem and installed-service proof remain open.
 The normal entry accepts a bounded private `--config` JSON file while keeping
 environment-only synthetic launches; macOS permission tests reject group/other
 access, while Windows ACL and installed-service proof remain open. A
+five-minute default poll interval, bounded five-to-sixty-minute private setting
+and explicit five-second loopback synthetic override are now parsed by the
+service. The disposable demo watches atomic config replacement and restarts
+only the service process it owns; installed restart control remains open.
+Saving a regular interval clears a prior synthetic override. During the wait
+between inventory polls, the compiled loop reports health and renews its cloud
+lease every minute without querying Orthanc. The live synthetic run observed
+`reported_at` advance with an unchanged last successful poll timestamp.
+A protected [hosted Settings entry](../../apps/web/src/app/staff/settings/SourceConnectionPanel.tsx)
+requests a bundled local page in the existing Electron window without putting
+Orthanc credentials in the hosted renderer. The
+[bundled Settings page](../../apps/desktop/static/source-settings.html) has the
+same left navigation and a return path. The earlier separate-window design
+tested and saved the source in the
+[interactive proof](../../docs/evidence/41-interactive-synthetic-desktop-demo.md);
+the in-window revision also passed a native synthetic clickthrough, return and
+same-source test/save. The saved five-minute poll admitted a second
+synthetic CT after Electron exited.
+Installed-service ownership remains unverified. A
 [scoped S3 admission helper](../../libs/storage/src/upload-admission.ts)
 and [disposable MinIO proof](../../docs/evidence/22-upload-admission.md) now
 cover short-lived signed PUT, resumed multipart parts, completion, HEAD and
@@ -110,8 +130,10 @@ device, source generation and lease fence, and the staff read rechecks active
 membership. The server marks missing or older-than-two-minute reports stale and
 hides reports from expired leases or superseded fences. The
 [source-health session](../sessions/2026-09-24-source-health.md) records the
-focused PostgreSQL 15 role/fence proof; connected service reporting and the full
-PostgreSQL 18 disposable proof remain unverified.
+focused PostgreSQL 15 role/fence proof. The interactive disposable PostgreSQL
+18 stack accepted the compiled service's report after its route matched the
+shared numeric-generation contract; staff saw HEALTHY. Installed reporting
+remains unverified.
 
 The [compiled restart regression](../../docs/evidence/33-compiled-sync-crash-recovery.md)
 now crashes after cloud upload admission commits but before its response reaches
@@ -119,8 +141,8 @@ SQLite. On restart, the local service clears only its source queue lease after
 acquiring the exclusive singleton lock, retries the same stable admission key,
 and reuses one cloud upload ID. The competing-process check confirms a process
 that cannot acquire the singleton lock cannot clear a queue lease. This remains
-local synthetic evidence; connected Docker and installed-service restart proofs
-are open. See the [session](../sessions/2026-09-24-idempotent-admission-restart.md).
+local and connected synthetic evidence; installed-service restart proof remains
+open. See the [session](../sessions/2026-09-24-idempotent-admission-restart.md).
 
 ## Connected to
 
@@ -135,9 +157,10 @@ Creates [Report packages](report-package.md); admin pairing depends on
 
 ## Surfaces
 
-Current: a compiled normal service entry, synthetic local discovery
-process, injected sync loop and private loopback upload tests, plus connected
-synthetic device-to-Ready cloud APIs and worker, with
+Current: a compiled normal service entry, an administrator-only bundled Electron
+Settings page, synthetic local discovery process, injected sync loop and
+private loopback upload tests, plus connected synthetic device-to-Ready cloud
+APIs and worker, with
 [bounded evidence](../../docs/evidence/19-local-spool-and-loop.md) and
 [connected proof](../../docs/evidence/26-connected-ingestion.md).
 Planned: store the local paired credential in an OS vault and complete installed
@@ -147,3 +170,5 @@ transfers exist.
 ## See
 
 [Plan phases P0/P3/P5](../../docs/01-final-clarity-v2-plan.md#4-implementation-checklist).
+[Desktop source-setting clarification](../sessions/2026-09-24-desktop-onboarding-source-settings.md).
+[In-window Settings correction](../sessions/2026-09-24-in-window-source-settings.md).

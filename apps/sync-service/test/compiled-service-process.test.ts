@@ -201,6 +201,7 @@ test("compiled production service discovers, uploads and seals one synthetic stu
     CLARITY_ORTHANC_AUTHORIZATION: "Basic dGVzdDp0ZXN0",
     CLARITY_INGESTION_API_URL: `http://127.0.0.1:${cloudPort}/`,
     CLARITY_SYNC_ALLOW_INSECURE_LOCALHOST: "1",
+    CLARITY_SYNC_SYNTHETIC_POLL_INTERVAL_SECONDS: "5",
     CLARITY_DEVICE_AUTHORIZATION: `ClarityDevice ${reportId}.${"A".repeat(43)}`,
   };
   const startService = (): ChildProcess =>

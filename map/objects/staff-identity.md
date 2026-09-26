@@ -4,8 +4,8 @@ type: object
 title: Hanko identity and staff access
 universe: live
 status: verified
-updated: 2026-09-23
-revision: device-admin-pairing-proof-2026-09-23
+updated: 2026-09-24
+revision: in-window-source-settings-2026-09-24
 ---
 
 # Hanko identity and staff access
@@ -66,14 +66,21 @@ separate unresolved release gate, not automatically supplied by staff login.
 
 ## Surfaces
 
-Current: [Next.js shell](../../apps/web/src/app/page.tsx), Hanko sign-in,
+Current: [root sign-in redirect](../../apps/web/src/app/page.tsx), Hanko sign-in,
 no-access page, protected staff dashboard and admin settings with grant/disable.
 The two-account proof forwarded provider-issued cookies over HTTP. A later
 [Chromium proof](../../docs/evidence/16-staff-web-hanko.md) verified a Secure
 HttpOnly session across localhost Hanko/web ports and pending-staff denial.
-Hanko Elements screen flow, Electron packaging and a hosted V2 identity service
-remain unproven. No approved production V2 staff user exists yet.
+The [interactive synthetic desktop](../../docs/evidence/41-interactive-synthetic-desktop-demo.md)
+signed in a disposable preapproved administrator, showed the left
+Studies/Doctors/Settings navigation and opened the earlier bundled local source
+window after a fresh administrator check. The subsequent in-window Settings
+revision passed a native synthetic clickthrough. Electron packaging and
+a hosted production V2 identity service remain unproven. No approved production
+V2 staff user exists yet. The Hanko membership guard still owns access.
 
 ## See
 
 [Hanko research and V1 impact](../../docs/research/hanko.md).
+[Desktop onboarding clarification](../sessions/2026-09-24-desktop-onboarding-source-settings.md).
+[In-window Settings correction](../sessions/2026-09-24-in-window-source-settings.md).

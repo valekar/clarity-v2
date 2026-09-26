@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { dashboardSignInUrl, isTrustedUrl, trustedOrigin } from "../src/navigation-policy.ts";
+import {
+  dashboardSignInUrl,
+  isHostedSettingsUrl,
+  isTrustedUrl,
+  sourceSectionUrl,
+  trustedOrigin,
+} from "../src/navigation-policy.ts";
 
 test("requires credential-free HTTPS origins for dashboard and Hanko", () => {
   assert.equal(trustedOrigin("https://staff.example.test"), "https://staff.example.test");
@@ -28,4 +34,21 @@ test("starts the hosted dashboard at its staff sign-in route", () => {
     dashboardSignInUrl("https://staff.example.test"),
     "https://staff.example.test/sign-in",
   );
+});
+
+test("only hosted Settings can request the in-window private form", () => {
+  const origin = "https://staff.example.test";
+  assert.equal(isHostedSettingsUrl(`${origin}/staff/settings`, origin), true);
+  assert.equal(isHostedSettingsUrl(`${origin}/staff`, origin), false);
+  assert.equal(isHostedSettingsUrl("https://other.example.test/staff/settings", origin), false);
+  assert.equal(isHostedSettingsUrl("file:///staff/settings", origin), false);
+});
+
+test("local Settings navigation accepts only fixed staff destinations", () => {
+  const origin = "https://staff.example.test";
+  assert.equal(sourceSectionUrl(origin, "studies"), `${origin}/staff`);
+  assert.equal(sourceSectionUrl(origin, "doctors"), `${origin}/staff/doctors`);
+  assert.equal(sourceSectionUrl(origin, "settings"), `${origin}/staff/settings`);
+  assert.equal(sourceSectionUrl(origin, "https://other.example.test"), null);
+  assert.equal(sourceSectionUrl(origin, "../api/device-admin/authorize"), null);
 });

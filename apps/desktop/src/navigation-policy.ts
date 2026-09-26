@@ -28,3 +28,27 @@ export function isTrustedUrl(value: string, origins: ReadonlySet<string>): boole
 export function dashboardSignInUrl(origin: string): string {
   return new URL("/sign-in", origin).href;
 }
+
+export function isHostedSettingsUrl(value: string, dashboardOrigin: string): boolean {
+  try {
+    const url = new URL(value);
+    return (
+      url.origin === dashboardOrigin &&
+      url.pathname === "/staff/settings" &&
+      url.username === "" &&
+      url.password === ""
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function sourceSectionUrl(origin: string, section: unknown): string | null {
+  const routes: Record<string, string> = {
+    studies: "/staff",
+    doctors: "/staff/doctors",
+    settings: "/staff/settings",
+  };
+  if (typeof section !== "string" || !Object.hasOwn(routes, section)) return null;
+  return new URL(routes[section] ?? "/staff/settings", origin).href;
+}

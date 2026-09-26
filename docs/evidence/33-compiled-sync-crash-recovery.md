@@ -81,3 +81,22 @@ by this record; rerun the opt-in proof after Docker is healthy and capture its
 exit status and JSON result. The harness covers the pre-import source-spool
 boundary and asserts a post-import completed-upload restart boundary; both
 connected behaviors remain unverified until that run passes.
+
+## Connected rerun, 24 September
+
+After Docker recovered, `CLARITY_COMPILED_SYNC_PROOF=1 bash
+deploy/cloud/scripts/proof.sh` exited 0. The first attempt exposed a harness
+startup race: it queried `local_instance_upload` before the compiled service
+created that table. The harness now waits for the table's presence through
+`sqlite_master`. The rerun logged `cloudState=ready|sealed|completed`,
+`crashSignal=SIGKILL`, `postImportCrashSignal=SIGKILL`,
+`postImportRestartPolledSource=true`,
+`postImportRestartPreservedUploadAndInstance=true`, `uploadCountAfterRestart=1`
+and `processStartedAndStopped=true`. The same run passed container replacement
+persistence and restore into fresh PostgreSQL/MinIO volumes, then removed its
+disposable resources. Log:
+`/tmp/clarity-v2-compiled-proof-rerun-20260924.log` on the test host.
+
+This proves a bounded separate synthetic source and compiled-service restart
+path. It does not prove installed OS service lifecycle, local settings, source
+version breadth or real patient data handling.

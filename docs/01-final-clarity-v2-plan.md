@@ -1,10 +1,10 @@
 # 01 — Clarity V2 desktop and automatic Orthanc ingestion
 
-> **Version:** 1.2  
-> **Date:** 2026-09-23  
+> **Version:** 1.6
+> **Date:** 2026-09-24  
 > **Author:** Codex, using the Planning Doc Generator and ICM Architect skills  
 > **Goal:** A simple installed staff application with unattended local Orthanc ingestion, a dedicated cloud backend and Hanko staff authentication.  
-> **Status:** Synthetic worker crash recovery, Hanko staff web and local Chromium cookie proofs passed; connected ingestion, clinical viewing, installers and deployment pending.
+> **Status:** Synthetic separate-source ingestion, compiled service crash recovery and local source setup passed. The source form's in-window synthetic clickthrough passed; installed Electron onboarding, clinical breadth, installers and deployment remain pending.
 
 ## Contents
 
@@ -40,6 +40,16 @@ attention. Staff never type study metadata merely to create a record and do not
 upload DICOM manually. Phone numbers are entered/confirmed on the sharing screen;
 doctor selection fills its number. Staff can review prepared patient/doctor
 messages. The backend performs delivery after explicit Generate and send.
+
+On first launch the installed Electron app opens staff sign-in. A person may create
+a Hanko identity, but access starts only after an administrator links that verified
+identity to an active Clarity staff membership. After sign-in, the left navigation
+shows Studies, Doctors and Settings. An administrator can use Settings on the
+designated source-owner computer to test and save its private Orthanc REST
+connection and a five- or ten-minute discovery interval. The independent service
+then fetches studies on that schedule, including while Electron is closed.
+The source form is a page in the same Electron window and Settings flow; it does
+not open a second application window.
 
 ### System outcome
 
@@ -78,7 +88,9 @@ sharing remains disabled. Staff authorization is the immediate design focus.
 
 Priority P0 = required for staff pilot; P1 = required for sharing release or its
 explicit prerequisite. S1 = latest V2 request; S2 = preceding discussion; S3 =
-inspected current source/client UI; D = proposed engineering decision.
+inspected current source/client UI; S4 = 24 September desktop and connection
+request; S5 = 24 September doctor directory correction; S6 = 24 September
+desktop window controls request; D = proposed engineering decision.
 
 | ID    | Requirement                                                                                      | Priority | Source  |
 | ----- | ------------------------------------------------------------------------------------------------ | -------- | ------- |
@@ -89,6 +101,11 @@ inspected current source/client UI; D = proposed engineering decision.
 | BR-05 | Patient number entry and doctor search/select/add on sharing screen                              | P1       | S2/S3   |
 | BR-06 | Explicit Generate and send; backend delivery; copy and QR conveniences                           | P1       | S2/S3   |
 | BR-07 | Expiry revokes access independently of stored-file retention                                     | P1       | S2/V1/D |
+| BR-08 | Installed Electron opens sign-in, then left Studies/Doctors/Settings navigation                  | P0       | S4      |
+| BR-09 | Admin can test/save local Orthanc REST connection and select five/ten-minute polling             | P0       | S4      |
+| BR-10 | Source connection stays inside the existing Electron Settings flow, without a pop-up window      | P0       | S4      |
+| BR-11 | Doctor directory supports adding and searching doctors with Indian mobile input and display      | P1       | S5      |
+| BR-12 | Desktop uses the operating system's native window controls: macOS traffic lights and Windows caption buttons | P0 | S6 |
 | TR-01 | TypeScript, pnpm-workspace monorepo, Turbo, Next.js, Electron, shared libs/                      | P0       | S1      |
 | TR-02 | Windows/macOS installers include independent native-managed sync service                         | P0       | S1/S2   |
 | TR-03 | Private Orthanc stays private; device initiates all cloud connections                            | P0       | S2      |
@@ -101,6 +118,9 @@ inspected current source/client UI; D = proposed engineering decision.
 | TR-10 | ICM map/AGENTS/rules/templates; update on discussions and changes; no wiki                       | P0       | S1      |
 | TR-11 | Selectively reuse verified owners/tests; no dependency on V1 checkout                            | P0       | S1      |
 | TR-12 | Recipient access remains scoped and verified; migration cannot invent verified phone claims      | P1       | S2/S3/D |
+| TR-13 | Hanko identity requires preapproved active Clarity database membership for staff access          | P0       | S4      |
+| TR-14 | Source credentials and polling config belong to independent service, not hosted renderer         | P0       | S4/D    |
+| TR-15 | The bundled local source page uses the same Electron window and a narrow, admin-checked bridge    | P0       | S4/D    |
 
 ### Approved direction, proposals and open inputs
 
@@ -110,8 +130,9 @@ ingestion; service independent of user login; contacts at sharing time.
 
 Proposed here: `clarity-v2` sibling name, single dedicated cloud stack, direct S3
 intake followed by cloud Orthanc indexing, hosted Next.js inside Electron, email
-passcode baseline, five-minute discovery, a service installed preferably on the
-Orthanc host, fixed admin/staff roles and immutable dispatch snapshots.
+passcode baseline, configurable five/ten-minute discovery with five-minute
+default, a service installed preferably on the Orthanc host, fixed admin/staff
+roles and immutable dispatch snapshots.
 
 Unresolved inputs have IDs in section 6. No answer is inferred as approval of an
 external action. The plan can be reviewed while those release inputs remain open.
@@ -252,6 +273,15 @@ Navigation: Studies (dashboard), Doctors, Settings. Settings contains Staff acce
 and Connection/status for admins. Put sync progress and errors on the study row;
 avoid separate operator dashboards until there is a demonstrated need.
 
+Installed-app entry: read an installer-owned dashboard/Hanko origin configuration,
+open the hosted `/sign-in` screen, and retain the staff session in the isolated
+Electron partition. Show a retryable setup/error state when the configured services
+are unreachable. The root `/` preview is not the desktop product. After successful
+Hanko authentication, require active Clarity database membership before showing
+the staff workspace. A Hanko registration without that membership reaches
+No access; it never creates a role. The left navigation must remain visible at
+desktop and narrow widths, with Settings clearly reachable.
+
 Staff task: sign in → find automatically discovered study → check Ready/view →
 open sharing screen → enter patient mobile/select doctor → review → Generate and
 send. Viewing does not require a recipient phone. Editing contact information must
@@ -313,6 +343,9 @@ Bootstrap the first admin with an audited one-time operator procedure against a
 verified Hanko subject; subsequent grants require an active admin. Enforce at least
 one active admin under concurrency. Keep identity links unique by provider/issuer/
 subject. Do not auto-link by unverified email or copy credentials from Clerk.
+"Preconfigured users" means active Clarity staff memberships linked to verified
+Hanko subjects. Passwords or passcodes remain with Hanko; the Clarity database does
+not acquire a second password login path.
 
 Use active-session validation, expiry checks and current membership at protected
 boundaries. Distinguish auth outage (503/unavailable) from invalid session (401)
@@ -344,6 +377,14 @@ service-install prototype; verify its native installer hooks and license. A plai
 DMG drag-and-drop does not by itself install a system daemon: macOS needs the
 appropriate signed installer/approved service registration flow.
 
+The installer supplies and persists the trusted dashboard/Hanko origins. The
+desktop must not depend on developer shell environment variables at every launch.
+When origins are missing or the service is offline, show an actionable local setup
+state with retry instead of the inert foundation page. The sign-in route is the
+normal first view; authenticated users reach the staff left navigation. Only the
+designated source-owner computer offers local source configuration; other staff
+desktops show cloud source status without local credential controls.
+
 Windows: install a constrained service account, automatic service start and restart
 on failure, dedicated data directory and named-pipe ACLs. macOS: system LaunchDaemon
 (not a per-login LaunchAgent), dedicated data directory/user permissions and Unix
@@ -361,6 +402,50 @@ IPC exposes named operations: read status, test configured source, apply admin-
 authorized configuration. Validate caller, operation and payload; never expose
 arbitrary URLs, filesystem paths, SQL, shell commands or raw Electron APIs. Remote
 web content cannot read local credentials or redirect the service to a new endpoint.
+The named admin source-setting operation is an explicit exception to the latter:
+the hosted Settings page only requests in-window navigation to a bundled local
+Settings page. Electron replaces the current page in the existing window; it
+does not open a pop-up. A back action returns to hosted Settings. The bundled
+page keeps the Settings navigation context visible. After fresh backend
+active-admin authorization, that local page sends
+the candidate URL, username and secret directly to the privileged local process.
+It validates and probes the Orthanc REST base URL, rejects redirects, bounds
+response size/time and atomically saves the connection to service-owned private
+storage. A blank secret field retains the existing secret. Reads return a
+redacted connection summary only. Failed test/save preserves the prior working
+configuration. Changing Orthanc server identity or source binding requires
+explicit re-pair/reconciliation, never silent cursor reuse. A hosted browser
+alone cannot configure a workstation's private source.
+
+The independent service owns a persisted discovery interval, default five minutes
+with five and ten minute presets (bounded custom minutes may follow). Apply a
+changed interval without overlapping polls, resume on restart and report next/last
+poll and source errors. Reconciliation/backoff remain separate from this schedule.
+The synthetic proof may use a short explicit test override; that override must not
+become an installed default. Staff logout or Electron quit cannot stop polling.
+
+```mermaid
+sequenceDiagram
+    participant Admin as Signed-in administrator
+    participant Hosted as Hosted Settings
+    participant Main as Electron main
+    participant Backend as Clarity/Hanko backend
+    participant Local as Bundled in-window Settings page
+    participant Service as Independent sync service
+    participant Orthanc as Private Orthanc REST
+    Admin->>Hosted: Open local connection settings
+    Hosted->>Main: Named open request, no source credentials
+    Main->>Backend: Recheck active Hanko/Clarity admin
+    Backend-->>Main: Authorized or denied
+    Main->>Local: Navigate same window to bundled page
+    Admin->>Local: Enter REST URL, username, secret, interval
+    Local->>Main: Named test/save operation
+    Main->>Orthanc: Bounded /system probe, no redirects
+    Main->>Service: Apply private config through controlled local channel
+    Service->>Orthanc: Scheduled incremental discovery
+    Local->>Main: Back to Settings (named navigation)
+    Main->>Hosted: Restore hosted Settings in same window
+```
 
 | Event                                                                | Required outcome                                                                                |
 | -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
@@ -714,13 +799,15 @@ release packaging.
 - [x] P2.1 — Implement Hanko session adapter, normalized identity links, no-access registration and audited first-admin bootstrap. Verify valid/invalid/revoked/wrong-origin sessions and Hanko outage. [Two-identity protected web and browser cookie proof](evidence/16-staff-web-hanko.md), [server adapter](evidence/10-hanko-session-adapter.md) and [database-backed guard](evidence/13-staff-access-guard.md) passed. Packaged Electron behaviour remains a separate P0.2 gate.
 - [x] P2.2 — Implement admin/staff authorization at every API, staff add/disable and last-admin protection. Use real DB concurrency tests and two real identities. [Audited SQL concurrency proof](evidence/12-staff-access-database.md) and [two-identity protected web proof](evidence/16-staff-web-hanko.md) passed for all current application APIs; future clinical APIs must enforce the same active membership boundary.
 - [x] P2.3 — Build compact Studies/Doctors/Settings navigation and sharing-form skeleton from approved UI primitives; verify labels, keyboard, narrow widths, errors, no patient data leakage and no implicit sends. [Synthetic UI evidence](evidence/02-staff-ui.md).
+- [ ] P2.4 — Make the installed Electron front door open Hanko sign-in with persisted trusted origins and retryable errors; after login show left Studies/Doctors/Settings navigation, while unapproved registration stays No access. Use the native framed window so macOS shows its traffic lights and Windows shows its caption buttons, with no in-page window controls. Owners: `apps/desktop/`, `apps/web/src/app/sign-in/`, `apps/web/src/app/staff/`. The [interactive synthetic desktop](evidence/41-interactive-synthetic-desktop-demo.md) signed in an active administrator and showed the left navigation from an isolated Electron profile. Packaged macOS/Windows launches, session expiry/logout and narrow navigation remain to prove.
 
 ### Phase 3 — Local discovery and durable machine ingestion
 
 - [ ] P3.1 — Implement device pairing/revocation, source binding, lease/fencing and narrow admin-authorized IPC. Prove a staff token cannot act as device and a device cannot administer/view unrelated data. [Disposable PostgreSQL and focused IPC/server proof](evidence/21-device-pairing.md) passed; the compiled service acquired a lease in the [connected proof](evidence/26-connected-ingestion.md). Containerized two-identity pairing and protected credential storage remain pending.
-- [ ] P3.2 — Implement SQLite schema/checkpoint+queue transaction, Orthanc discovery, initial inventory/replay and periodic reconciliation. Kill at transaction boundaries and prove no lost event/duplicate logical Report. [Synthetic inventory evidence](evidence/04-local-discovery.md), [anchored process proof](evidence/14-anchored-inventory.md), [compiled production-entry restart proof](evidence/19-local-spool-and-loop.md) and one-object [connected source-to-cloud proof](evidence/26-connected-ingestion.md) passed, including reviewed crash/reset fixes and a local singleton lock. A [compiled crash-boundary harness](evidence/33-compiled-sync-crash-recovery.md) now kills after durable spooling and after completed cloud import, then checks same-path recovery and a fresh source poll; its connected result is unverified because Docker storage failed. Centre-scale source evidence remains pending.
+- [ ] P3.2 — Implement SQLite schema/checkpoint+queue transaction, Orthanc discovery, initial inventory/replay and periodic reconciliation. Kill at transaction boundaries and prove no lost event/duplicate logical Report. [Synthetic inventory evidence](evidence/04-local-discovery.md), [anchored process proof](evidence/14-anchored-inventory.md), [compiled production-entry restart proof](evidence/19-local-spool-and-loop.md) and one-object [connected source-to-cloud proof](evidence/26-connected-ingestion.md) passed, including reviewed crash/reset fixes and a local singleton lock. A [compiled crash-boundary harness](evidence/33-compiled-sync-crash-recovery.md) killed after durable spooling and after completed cloud import, then passed same-path recovery, one upload and a fresh source poll on a disposable connected stack. Centre-scale source and installed-service evidence remain pending.
 - [ ] P3.3 — Implement bounded spool, per-file hashes, signed multipart upload, persisted parts and cloud completion/reconciliation. Test loss after provider acceptance, expired URLs, restart, low disk and changed source bytes. [Local spool/restart and loopback contract proof](evidence/19-local-spool-and-loop.md), [S3 admission proof](evidence/22-upload-admission.md), one-object [connected admission/completion proof](evidence/26-connected-ingestion.md) and a 64 MiB + 1 byte three-part connected recovery after an expired signed URL, lost accepted response and SQLite reopen passed. [Synthetic spool-capacity and source-mutation proofs](evidence/31-spool-capacity-source-mutation.md) also pass; they reject a low-space reservation and retain durable attention after source bytes change even after signed PUT acceptance. [Atomic spool failure/retry proof](evidence/40-spool-atomic-recovery.md) injects partial-write ENOSPC, rename failure and invalid byte counts, then checks clean SQLite reopen/retry. Native filesystem ENOSPC and installed-service behavior remain pending.
 - [ ] P3.4 — Implement idempotent Report/file admission and constrained fresh PostgreSQL tables. The fifteen-migration isolated database proof and [connected proof](evidence/26-connected-ingestion.md) cover optional observations, UID/digest reservations, a two-session same-key admission race, retry, source fences, upload verification, Study seal-state reconciliation, Study/manifest API flow and one compiled local-service activation. The connected three-part recovery used the same upload after SQLite reopen. A [local compiled restart proof](evidence/33-compiled-sync-crash-recovery.md) now covers a cloud-accepted admission whose response is lost at SIGKILL, same-key/same-upload recovery and source-local lease cleanup behind the singleton lock. Connected duplicate-installer/restart cases remain open.
+- [ ] P3.5 — Implement the administrator's local Orthanc REST test/save/settings flow through narrow authenticated Electron/service IPC, with private credential storage, source-binding protection and a persisted five/ten-minute service poll interval. Keep the bundled source form inside the existing Electron Settings window, with a clear return path and no pop-up. Owners: `apps/desktop/`, `apps/sync-service/`, `apps/web/src/app/staff/settings/`, `deploy/installers/`. The [interactive synthetic desktop](evidence/41-interactive-synthetic-desktop-demo.md) tested and saved a separate Orthanc, started the independent service and reached Ready twice, including a scheduled five-minute poll after Electron exited. Its one-minute idle health/lease heartbeat advanced without another inventory poll; focused tests cover five/ten-minute values, source-binding rejection and clearing a synthetic poll override. The [in-window revision](evidence/42-in-window-source-settings.md) passed native synthetic clickthrough, return and same-source test/save in one window. Denied staff/anonymous local calls, installed restart persistence and installed macOS/Windows service acceptance remain to prove.
 
 ### Phase 4 — Cloud processing and staff viewing
 
@@ -739,7 +826,7 @@ release packaging.
 ### Phase 6 — Sharing release after recipient-policy decision
 
 - [ ] P6.1 — Resolve OI-06 and implement the approved recipient identity/access boundary; no bearer-only fallback. Verify unauthorized access, wrong recipient, expiry and revocation across every content route.
-- [ ] P6.2 — Implement patient mobile, doctor select/add/autofill, message preview, copy/QR and explicit idempotent final Send. Atomically persist contacts snapshot, dispatch files, grants and outbox. [Synthetic doctor directory proof](evidence/23-doctor-directory.md) and [sharing UI preview](evidence/25-viewer-and-sharing-ui.md) passed their bounded checks; Send/QR remain unavailable. The [policy-blocked dispatch snapshot/outbox](evidence/27-policy-gated-dispatch-outbox.md) stores immutable recipient choices but has no file grants, recipient authorization or transactional final Send. OI-06 remains open.
+- [ ] P6.2 — Implement patient mobile, doctor select/add/autofill, message preview, copy/QR and explicit idempotent final Send. Atomically persist contacts snapshot, dispatch files, grants and outbox. Doctor entry and search must use Indian mobile presentation (+91 and ten mobile digits), with server-side Indian validation and canonical E.164 storage. [Synthetic doctor directory proof](evidence/23-doctor-directory.md), [Indian doctor UI correction](evidence/43-indian-doctor-directory-ui.md) and [sharing UI preview](evidence/25-viewer-and-sharing-ui.md) passed bounded checks; Send/QR remain unavailable. The [policy-blocked dispatch snapshot/outbox](evidence/27-policy-gated-dispatch-outbox.md) stores immutable recipient choices but has no file grants, recipient authorization or transactional final Send. OI-06 remains open.
 - [ ] P6.3 — Adapt the chosen messaging provider, signed callbacks, bounded retry and uncertain-send reconciliation. Synthetic provider tests first; real canary only with explicit authorization and provider readiness. [In-memory uncertainty/idempotency tests](evidence/24-synthetic-messaging.md), a [durable blocked outbox/verified-callback contract proof](evidence/27-policy-gated-dispatch-outbox.md), a [bounded synthetic worker/callback handler](evidence/36-synthetic-dispatch-tick-and-callback.md), and a [durable rotating uncertain listing](evidence/39-uncertain-dispatch-listing.md) pass focused checks. A local PostgreSQL 15 proof applied migrations 0001–0017 and exercised the worker, repository, synthetic provider and signed callback in one rolled-back transaction. It does not prove committed restart durability, concurrent workers, or restricted-role operation. The PostgreSQL 18 Docker proof and production worker/scheduler wiring remain pending; no delivery role is granted, and a real provider, callback HTTP endpoint and canary remain pending.
 - [ ] P6.4 — Prove intended-recipient view/download, seven-day boundary, in-flight expiry behaviour and late-instance isolation. Validate Windows/macOS staff UI and phone browser journey.
 - [ ] P6.5 — Record release evidence, operational runbook, supported versions, outstanding limits and ICM updates. Keep staff-pilot and external-sharing release status separate. A [synthetic operational status/runbook](operational-status.md) records current commands, supported proof versions and open gates; final release evidence remains pending.
@@ -757,6 +844,11 @@ exists. Use synthetic data; record commands, versions, actual results and limita
 | BR-04         | P2.3, P4.3–P4.4        | [Staff UI and browser viewer](evidence/25-viewer-and-sharing-ui.md): source-offline Ready search, scoped gateway and OHIF route                                                                                                      | P2.3 passed; one strict synthetic pixel pattern rendered at 1280×900; OHIF mobile layout and modality/codec breadth pending |
 | BR-05 / BR-06 | P6.2–P6.3              | `06-sharing.md`: contact entry, explicit send, verified provider state                                                                                                                                                               | Pending                                                                                                                     |
 | BR-07 / TR-12 | P6.1, P6.4             | `06-sharing.md`: recipient identity, expiry, frozen scope, bytes retained                                                                                                                                                            | Decision + implementation pending                                                                                           |
+| BR-08 / TR-13 | P0.2, P2.4             | Electron first-launch sign-in, Hanko subject plus active Clarity membership, No access for unapproved signup and left-navigation checks on both OS families                                                                          | Synthetic Electron admin sign-in and left navigation passed; packaged and both-OS proof pending                             |
+| BR-09 / TR-14 | P3.5, P5.1–P5.2        | Admin-only local Orthanc test/save, redacted read, private credential persistence, interval/restart and source-to-Ready after Electron quit                                                                                          | Synthetic test/save and five-minute post-quit Ready passed; installed continuity pending                                    |
+| BR-10 / TR-15 | P3.5                   | [In-window revision](evidence/42-in-window-source-settings.md): opening source connection keeps one Electron window; bundled form retains Settings navigation, returns to hosted Settings, and hosted renderer cannot read the secret | Native synthetic clickthrough, return and same-source test/save passed; installed proof pending                             |
+| BR-11         | P6.2                   | [Indian doctor UI correction](evidence/43-indian-doctor-directory-ui.md): styled directory, add/search, +91 input/display and synthetic browser check                         | Doctor groundwork passed in the disposable demo; external sharing remains gated                                               |
+| BR-12         | P2.4                   | [Native desktop window controls](evidence/44-desktop-window-controls.md): framed Electron window and focused macOS traffic-light check | macOS synthetic development shell proof; Windows and packaged acceptance pending |
 | TR-01         | P1.1–P1.2              | [Workspace checks](evidence/01-workspace-checks.md): frozen install, build/types, package exports                                                                                                                                    | P1.1/P1.2 passed                                                                                                            |
 | TR-02         | P0.3, P5.1–P5.3        | [Mac foreground lifecycle proof](evidence/11-macos-lifecycle-probe.md); later `05-installers.md`: clean OS install/lifecycle/update matrix                                                                                           | Packaged foreground/crash path passed; installed cross-OS lifecycle pending                                                 |
 | TR-03 / TR-07 | P3.1, P5.2             | `03-ingestion.md`: outbound-only network and independent credential tests                                                                                                                                                            | Pending                                                                                                                     |
@@ -815,11 +907,12 @@ are implementation inputs, not claims of completed compatibility.
 
 The initial planning run created this plan, reuse inventory, Hanko research,
 agent rules and ICM map. The user then authorized parallel implementation of
-all phases. The current synthetic proofs cover the monorepo, staff web access,
-local discovery, selected transport and cloud worker recovery as recorded in
-the checklist. Device pairing, connected upload/admission, trusted manifests,
-scoped viewing and installers are being implemented; the checklist remains the
-acceptance record. No V1 source or data has been changed.
+all phases. On 24 September, the user clarified the installed desktop entry and
+local source Settings flow; P2.4/P3.5 and requirements BR-08/09, TR-13/14 record
+that acceptance. The later single-window correction is BR-10/TR-15. The current synthetic proofs cover the monorepo, staff web
+access, local discovery, selected transport and cloud worker recovery as recorded
+in the checklist. The checklist remains the acceptance record. No V1 source or
+data has been changed.
 
 Hanko-only identity is confirmed. The user selected synthetic integration for
 now. Resolve centre OS/host, real Orthanc/cloud details, signing and recipient

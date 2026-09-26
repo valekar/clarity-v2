@@ -47,7 +47,7 @@ def sequence(group: int, number: int, value: bytes) -> bytes:
             struct.pack("<HHI", 0xFFFE, 0xE0DD, 0))
 
 
-def build_fixture(profile: str, suffix: str = "1", instance_suffix: str = "1") -> tuple[bytes, tuple[str, str, str]]:
+def build_fixture(profile: str, suffix: str = "1", instance_suffix: str = "1", patient_label: str = "PROOF") -> tuple[bytes, tuple[str, str, str]]:
     if profile not in IMPLEMENTED_PROFILES:
         raise ValueError(f"profile must be one of: {', '.join(IMPLEMENTED_PROFILES)}")
     if not re.fullmatch(r"[1-9][0-9]{0,31}", suffix):
@@ -59,6 +59,8 @@ def build_fixture(profile: str, suffix: str = "1", instance_suffix: str = "1") -
     sop_uid = f"{series_uid}.{instance_suffix}"
     if len(sop_uid) > 64:
         raise ValueError("generated SOP UID exceeds the DICOM 64-character limit")
+    if not re.fullmatch(r"[A-Z0-9_-]{1,24}", patient_label):
+        raise ValueError("synthetic patient label must be 1-24 uppercase ASCII letters, digits, hyphen or underscore")
 
     profiles = {
         "ct": ("CT", "1.2.840.10008.5.1.4.1.1.2"),
@@ -80,7 +82,7 @@ def build_fixture(profile: str, suffix: str = "1", instance_suffix: str = "1") -
         text(0x0008, 0x0016, b"UI", sop_class),
         text(0x0008, 0x0018, b"UI", sop_uid),
         text(0x0008, 0x0060, b"CS", modality),
-        text(0x0010, 0x0010, b"PN", "SYNTHETIC^PROOF"),
+        text(0x0010, 0x0010, b"PN", f"SYNTHETIC^{patient_label}"),
         text(0x0010, 0x0020, b"LO", "SYNTHETIC-ONLY"),
         text(0x0020, 0x000D, b"UI", study_uid),
         text(0x0020, 0x000E, b"UI", series_uid),
@@ -126,12 +128,13 @@ def build_fixture(profile: str, suffix: str = "1", instance_suffix: str = "1") -
 
 
 def main() -> None:
-    if len(sys.argv) not in (2, 3, 4, 5):
-        raise SystemExit("usage: make-synthetic-dicom.py OUTPUT [UID_SUFFIX] [INSTANCE_SUFFIX] [ct|mr|sr|pdf]")
+    if len(sys.argv) not in (2, 3, 4, 5, 6):
+        raise SystemExit("usage: make-synthetic-dicom.py OUTPUT [UID_SUFFIX] [INSTANCE_SUFFIX] [ct|mr|sr|pdf] [SYNTHETIC_LABEL]")
     suffix = sys.argv[2] if len(sys.argv) >= 3 else "1"
     instance_suffix = sys.argv[3] if len(sys.argv) >= 4 else "1"
-    profile = sys.argv[4] if len(sys.argv) == 5 else "ct"
-    data, uids = build_fixture(profile, suffix, instance_suffix)
+    profile = sys.argv[4] if len(sys.argv) >= 5 else "ct"
+    patient_label = sys.argv[5] if len(sys.argv) == 6 else "PROOF"
+    data, uids = build_fixture(profile, suffix, instance_suffix, patient_label)
     Path(sys.argv[1]).write_bytes(data)
     study_uid, series_uid, sop_uid = uids
     print(f"{study_uid}\t{series_uid}\t{sop_uid}")
