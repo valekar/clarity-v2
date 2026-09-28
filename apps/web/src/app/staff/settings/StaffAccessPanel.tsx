@@ -93,8 +93,8 @@ export function StaffAccessPanel() {
         </button>
       </div>
       <p className="form-intro">
-        Pending accounts show the verified email returned by Hanko. Confirm the person before
-        granting access. Email matches never grant access automatically.
+        Staff accounts are created by an administrator. Confirm the person before granting access.
+        Signing in does not grant a staff role automatically.
       </p>
       <p className="access-feedback" aria-live="polite">
         {status}

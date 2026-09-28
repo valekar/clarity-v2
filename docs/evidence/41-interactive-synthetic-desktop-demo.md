@@ -71,6 +71,44 @@ open for packaged two-OS and installed-service acceptance.
 
 ## Start
 
+The launcher now uses the staff-only username/password profile (updated
+2026-09-27): Hanko public signup and email delivery are disabled, and one
+synthetic administrator is provisioned through Hanko's local Admin API and
+bootstrapped in Clarity before Electron starts. The launcher prints the
+synthetic username/password. It stores them in `demo.json` and
+`admin-password.txt` in the mode-`0700` demo state directory, both mode `0600`.
+The observed run above predates this profile update and records the earlier
+passcode flow; use these current instructions for a new run.
+
+### Staff-only live rerun, 27 September 2026
+
+A fresh disposable local run opened Electron with native macOS close, minimize
+and full-screen controls. The bundled Hanko form showed **Username** then
+**Password**, with no signup or email step. The administrator-provisioned
+synthetic account signed in to Studies; Settings listed one active synthetic
+administrator. The in-window Orthanc form tested a separate loopback source,
+saved its private credentials and five-minute schedule, and started the
+independent sync process. One generated CT with patient ID `SYNTHETIC-ONLY`
+reached **READY** with 1/1 images verified; source health became **HEALTHY**.
+The study page opened the OHIF image canvas. Its compatibility panel warned
+that this object's transfer syntax could not be confirmed, so this run does
+not claim clinical viewer acceptance.
+
+The run used a web image built from the new username/password code and a
+previously built unchanged worker image because the package registry timed out
+during a fresh image rebuild. The web image had a build-time Hanko port, so
+the rerun bound Hanko to that same loopback port with
+`CLARITY_INTERACTIVE_DEMO_HANKO_PORT`. The launcher now forwards the generated
+password to its private Hanko helper and sends enrollment SQL through psql
+standard input. The base Compose dependency that started Mailpit for this
+no-email profile was removed; Hanko and the web remained healthy after the
+disposable Mailpit container was stopped. The source had one study; local SQLite advanced its change
+cursor to 7 and recorded one report and one received upload. A temporary
+loopback-only five-second synthetic poll expedited the UI proof; it was removed
+afterward, leaving the saved five-minute interval. The Electron window and
+disposable services were left running for review. No Coolify deployment,
+installed-service lifecycle or real centre source was tested.
+
 Run from the V2 repository:
 
 ```sh
@@ -79,7 +117,14 @@ bash deploy/cloud/scripts/run-synthetic-demo.sh
 
 The script uses Docker Compose to build a disposable local Hanko, PostgreSQL, MinIO, cloud Orthanc, web and worker stack. It also starts a separate source Orthanc bound only to a random `127.0.0.1` port. It completes the synthetic Hanko enrollment and administrator bootstrap before opening the Electron app. The command remains active until Ctrl-C. Ctrl-C stops only this demo's sync process, source container and Compose project, including its demo volumes.
 
-The launch output shows dashboard, Hanko, Mailpit and source Orthanc URLs, the generated administrator sign-in email, and the private manifest and service-config paths. Use the shown administrator email in Electron. Hanko sends the one-time passcode to the local Mailpit UI. The source URL and its `proof` login are in the private manifest, which is written with mode `0600` inside a mode `0700` per-user demo directory. The service config is also mode `0600`; it has the paired device and cloud credentials but leaves the Orthanc URL and authorization unset until the Settings form saves them.
+If registry downloads block a rebuild, the interactive launcher accepts a
+paired `CLARITY_INTERACTIVE_DEMO_WEB_IMAGE` and
+`CLARITY_INTERACTIVE_DEMO_WORKER_IMAGE` pointing to existing local images.
+The web image's `NEXT_PUBLIC_HANKO_API_URL` is compiled in; set
+`CLARITY_INTERACTIVE_DEMO_HANKO_PORT` to its loopback port so the generated
+Hanko endpoint matches. This override is for disposable local reuse only.
+
+The launch output shows dashboard, Hanko and source Orthanc URLs, the synthetic administrator username/password, and the private manifest and service-config paths. Sign in to Electron with the printed username/password. Mailpit is not started. The source URL and its `proof` login are in the private manifest. The service config is mode `0600`; it has the paired device and cloud credentials but leaves the Orthanc URL and authorization unset until the Settings form saves them.
 
 In Electron, open **Settings → Source connection**, enter the printed source Orthanc URL and the `proof` credentials from the manifest, test the connection, choose the polling interval, and save. The launcher watches the configured private file and gracefully restarts only the sync-service process it started. The saved interval applies on that restart. The default is five minutes.
 
@@ -95,4 +140,4 @@ The helper creates a tiny synthetic DICOM with a fixed `SYNTHETIC-ONLY` patient 
 
 ## Limits
 
-This is a synthetic local demonstration, not centre installation or production deployment. All service ports are bound to loopback. It uses temporary randomly generated cloud credentials and Mailpit, not a real email provider. No real patient data should be entered. The staff account is a synthetic Hanko administrator created for this disposable cloud database. Local sync configuration and checkpoint/spool files remain under the per-user demo state directory after Ctrl-C; the Docker data and generated source Orthanc are removed.
+This is a synthetic local demonstration, not centre installation or production deployment. All service ports are bound to loopback. It uses temporary randomly generated cloud credentials and an administrator-provisioned synthetic Hanko account. No real patient data should be entered. Local sync configuration, credentials and checkpoint/spool files remain under the per-user demo state directory after Ctrl-C; the Docker data and generated source Orthanc are removed.

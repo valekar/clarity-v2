@@ -6,10 +6,10 @@
 | --- | --- | --- | --- | --- |
 | [Recipient delivery and verification boundary](objects/delivery-boundary.md) | object | ghost | stub | 2026-09-24 |
 | [Buildable application shells and workspace packages](objects/foundation-shells.md) | object | live | verified | 2026-09-24 |
-| [V2 planning workspace](objects/planning-workspace.md) | object | live | verified | 2026-09-24 |
+| [V2 planning workspace](objects/planning-workspace.md) | object | live | verified | 2026-09-27 |
 | [Report and verified imaging package](objects/report-package.md) | object | ghost | stub | 2026-09-24 |
-| [Private source and synchronization service](objects/source-and-service.md) | object | live | verified | 2026-09-24 |
-| [Hanko identity and staff access](objects/staff-identity.md) | object | live | verified | 2026-09-24 |
+| [Private source and synchronization service](objects/source-and-service.md) | object | live | verified | 2026-09-27 |
+| [Hanko identity and staff access](objects/staff-identity.md) | object | live | verified | 2026-09-27 |
 | [Record a conversation or change](processes/session-maintenance.md) | process | live | verified | 2026-09-23 |
 | [Separate installed V2 with automatic Orthanc intake](decisions/2026-09-23-v2-direction.md) | decision | live | verified | 2026-09-23 |
 | [Keep Orthanc setup inside Electron Settings](decisions/2026-09-24-in-window-source-settings.md) | decision | live | verified | 2026-09-24 |
@@ -53,3 +53,6 @@
 | [Confirm synthetic Hanko passcode delivery](sessions/2026-09-24-synthetic-login-support.md) | session | live | verified | 2026-09-24 |
 | [Add synthetic modality and non-image viewer fixtures](sessions/2026-09-24-synthetic-viewer-fixtures.md) | session | live | verified | 2026-09-24 |
 | [Set Windows sync service to start at boot](sessions/2026-09-24-windows-service-boot-start.md) | session | live | verified | 2026-09-24 |
+| [Prepare an isolated synthetic Coolify test deployment](sessions/2026-09-27-coolify-test-readiness.md) | session | live | verified | 2026-09-27 |
+| [Run staff-only synthetic Electron demo](sessions/2026-09-27-staff-demo-run.md) | session | live | verified | 2026-09-27 |
+| [Restrict sign-in to administrator-provisioned staff](sessions/2026-09-27-staff-only-login.md) | session | live | verified | 2026-09-27 |

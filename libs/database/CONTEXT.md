@@ -31,10 +31,13 @@ optimistic membership versions, and preserve at least one effective admin.
 
 The database cannot authenticate the `p_actor_user_id` argument passed by the
 server runtime. Every route must derive that id by mapping issuer and subject
-from a validated Hanko session; never accept it from request data. The pending
-enrollment function likewise may only be called after server-side provider
-validation. It idempotently maps an exact `(provider, issuer, subject)` retry to
-the existing canonical user, creates no membership, and does not link by email.
+from a validated Hanko session; never accept it from request data. Migration
+`0018_staff_operator_provisioning.sql` removes runtime execution of pending
+enrollment and grants it to the private operator role. The sign-in guard no
+longer creates staff rows. An operator must provision the Hanko subject and
+call enrollment privately before an administrator grants membership. The
+function idempotently maps an exact `(provider, issuer, subject)` retry to the
+existing canonical user, creates no membership, and does not link by email.
 Bootstrap records the operator's database login in the audit row, but is not a
 replacement for validated Hanko identity enrollment. Do not expose these SQL
 functions as unauthenticated endpoints.

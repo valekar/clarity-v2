@@ -108,7 +108,7 @@ test("staff access guard with disposable PostgreSQL and synthetic Hanko HTTP", a
       await assert.rejects(() => repository.listStaffUsers({ limit: 101 }), /directory limit/);
     });
 
-    await t.test("pending identity is recorded without granting access", async () => {
+    await t.test("unprovisioned identity is denied without creating a staff row", async () => {
       mode = "unknown";
       assert.deepEqual(await guard.requireStaffRead("hanko=unknown"), {
         ok: false,
@@ -119,14 +119,7 @@ test("staff access guard with disposable PostgreSQL and synthetic Hanko HTTP", a
         issuer,
         subject: "e8e6af65-ec80-4ddb-af08-87dfb90dc0e8",
       });
-      assert.ok(pending);
-      assert.equal(pending.membership, null);
-      assert.equal(pending.active, true);
-      assert.equal(
-        (await repository.findStaffUserById(pending.staffUserId))?.displayName,
-        "synthetic@example.invalid",
-      );
-      assert.notEqual(pending.staffUserId, staffId);
+      assert.equal(pending, null);
     });
 
     await t.test("disabling membership is effective on the next request", async () => {

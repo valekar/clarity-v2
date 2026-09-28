@@ -64,7 +64,7 @@ services:
 
   hanko:
     image: ghcr.io/teamhanko/hanko:v3.0.4@sha256:a63ff255a85623723878bbc59f3797abc92ba32d0fcc580c6f1a28a66d51dc9c
-    command: [serve, public, --config, /config/hanko-runtime.yaml]
+    command: [serve, all, --config, /config/hanko-runtime.yaml]
     volumes:
       - ${HANKO_RUNTIME_CONFIG:?run scripts/proof.sh to generate config}:/config/hanko-runtime.yaml:ro
     ports:
@@ -72,8 +72,6 @@ services:
     depends_on:
       hanko-migrate:
         condition: service_completed_successfully
-      mailpit:
-        condition: service_started
     networks: [private]
     healthcheck:
       test: [CMD, /hanko, isready, --config, /config/hanko-runtime.yaml, public]

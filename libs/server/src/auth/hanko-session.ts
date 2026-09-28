@@ -2,7 +2,8 @@ export type HankoIdentity = Readonly<{
   issuer: string;
   subject: string;
   sessionId: string;
-  verifiedEmail: string;
+  displayName: string;
+  verifiedEmail?: string;
   expiresAt: Date;
 }>;
 
@@ -208,17 +209,13 @@ function parseSession(
   const tokenIssuer = values.issuer;
   const tokenAudience = values.audience;
   const expiration = values.expiration;
-  const email = values.email;
   if (
     typeof subject !== "string" ||
     typeof sessionId !== "string" ||
     typeof tokenIssuer !== "string" ||
     !Array.isArray(tokenAudience) ||
     !tokenAudience.every((item) => typeof item === "string") ||
-    typeof expiration !== "string" ||
-    typeof email !== "object" ||
-    email === null ||
-    Array.isArray(email)
+    typeof expiration !== "string"
   )
     return { kind: "malformed" };
   if (
@@ -231,12 +228,6 @@ function parseSession(
   )
     return { kind: "invalid" };
   if (!isValidTimestamp(expiration)) return { kind: "malformed" };
-  const emailClaims = email as Record<string, unknown>;
-  if (typeof emailClaims.is_verified !== "boolean" || typeof emailClaims.address !== "string")
-    return { kind: "malformed" };
-  if (emailClaims.is_verified !== true) return { kind: "invalid" };
-  const verifiedEmail = emailClaims.address.trim().toLowerCase();
-  if (!verifiedEmail.includes("@") || verifiedEmail.length > 320) return { kind: "malformed" };
   const expiresAt = new Date(expiration);
   if (!Number.isFinite(expiresAt.getTime())) return { kind: "malformed" };
   if (expiresAt <= now) return { kind: "invalid" };
@@ -250,13 +241,30 @@ function parseSession(
     if (!Number.isFinite(idleExpiresAt.getTime())) return { kind: "malformed" };
     if (idleExpiresAt <= now) return { kind: "invalid" };
   }
+  const email = values.email;
+  let verifiedEmail: string | undefined;
+  let displayName = "Clarity staff member";
+  if (email !== undefined) {
+    if (typeof email !== "object" || email === null || Array.isArray(email))
+      return { kind: "malformed" };
+    const emailClaims = email as Record<string, unknown>;
+    if (typeof emailClaims.is_verified !== "boolean" || typeof emailClaims.address !== "string")
+      return { kind: "malformed" };
+    if (emailClaims.is_verified !== true) return { kind: "invalid" };
+    const normalizedEmail = emailClaims.address.trim().toLowerCase();
+    if (!normalizedEmail.includes("@") || normalizedEmail.length > 320)
+      return { kind: "malformed" };
+    verifiedEmail = normalizedEmail;
+    displayName = normalizedEmail;
+  }
   return {
     kind: "valid",
     identity: Object.freeze({
       issuer,
       subject: subject.toLowerCase(),
       sessionId: sessionId.toLowerCase(),
-      verifiedEmail,
+      displayName,
+      ...(verifiedEmail === undefined ? {} : { verifiedEmail }),
       expiresAt,
     }),
   };

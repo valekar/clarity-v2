@@ -1,7 +1,7 @@
 # 01 — Clarity V2 desktop and automatic Orthanc ingestion
 
-> **Version:** 1.6
-> **Date:** 2026-09-24  
+> **Version:** 1.8
+> **Date:** 2026-09-27
 > **Author:** Codex, using the Planning Doc Generator and ICM Architect skills  
 > **Goal:** A simple installed staff application with unattended local Orthanc ingestion, a dedicated cloud backend and Hanko staff authentication.  
 > **Status:** Synthetic separate-source ingestion, compiled service crash recovery and local source setup passed. The source form's in-window synthetic clickthrough passed; installed Electron onboarding, clinical breadth, installers and deployment remain pending.
@@ -84,13 +84,22 @@ revocation, seven-day expiry and frozen file scope. Until then, sharing can be
 tested with synthetic recipients and a delivery stub; real external clinical
 sharing remains disabled. Staff authorization is the immediate design focus.
 
+**Hosted synthetic test checkpoint:** before either release, a dedicated Coolify
+environment may run the cloud stack with synthetic identities and DICOM only. It
+needs stable secrets and volumes, HTTPS web/Hanko endpoints, an externally
+reachable HTTPS signed-upload endpoint, private internal services and a hosted
+login → pair → upload → Ready → view proof. This checkpoint does not satisfy
+installed-centre, clinical-data or sharing-release acceptance.
+
 ## 1. Requirements
 
 Priority P0 = required for staff pilot; P1 = required for sharing release or its
 explicit prerequisite. S1 = latest V2 request; S2 = preceding discussion; S3 =
 inspected current source/client UI; S4 = 24 September desktop and connection
 request; S5 = 24 September doctor directory correction; S6 = 24 September
-desktop window controls request; D = proposed engineering decision.
+desktop window controls request; S7 = 27 September Coolify test request; S8 =
+27 September staff-only username/password clarification; D = proposed
+engineering decision.
 
 | ID    | Requirement                                                                                      | Priority | Source  |
 | ----- | ------------------------------------------------------------------------------------------------ | -------- | ------- |
@@ -106,6 +115,7 @@ desktop window controls request; D = proposed engineering decision.
 | BR-10 | Source connection stays inside the existing Electron Settings flow, without a pop-up window      | P0       | S4      |
 | BR-11 | Doctor directory supports adding and searching doctors with Indian mobile input and display      | P1       | S5      |
 | BR-12 | Desktop uses the operating system's native window controls: macOS traffic lights and Windows caption buttons | P0 | S6 |
+| BR-13 | Staff sign-in uses administrator-provisioned Hanko usernames and passwords; public signup and email login/delivery are disabled, while Clarity membership controls access | P0 | S2/S7/S8 |
 | TR-01 | TypeScript, pnpm-workspace monorepo, Turbo, Next.js, Electron, shared libs/                      | P0       | S1      |
 | TR-02 | Windows/macOS installers include independent native-managed sync service                         | P0       | S1/S2   |
 | TR-03 | Private Orthanc stays private; device initiates all cloud connections                            | P0       | S2      |
@@ -118,21 +128,30 @@ desktop window controls request; D = proposed engineering decision.
 | TR-10 | ICM map/AGENTS/rules/templates; update on discussions and changes; no wiki                       | P0       | S1      |
 | TR-11 | Selectively reuse verified owners/tests; no dependency on V1 checkout                            | P0       | S1      |
 | TR-12 | Recipient access remains scoped and verified; migration cannot invent verified phone claims      | P1       | S2/S3/D |
-| TR-13 | Hanko identity requires preapproved active Clarity database membership for staff access          | P0       | S4      |
+| TR-13 | Hanko identity requires a preprovisioned active Clarity database membership for staff access; unknown identities create no staff row | P0 | S4/S8 |
 | TR-14 | Source credentials and polling config belong to independent service, not hosted renderer         | P0       | S4/D    |
 | TR-15 | The bundled local source page uses the same Electron window and a narrow, admin-checked bridge    | P0       | S4/D    |
+| TR-16 | Isolated Coolify test deployment uses persistent V2 state, HTTPS public routes and synthetic-only hosted acceptance | P0 | S7 |
 
 ### Approved direction, proposals and open inputs
 
 Approved: separate V2; Electron/Next.js/TypeScript/pnpm/Turbo; Hanko replacing Clerk
 for V2; ICM instead of wiki; one-centre staff first; automatic private Orthanc
-ingestion; service independent of user login; contacts at sharing time.
+ingestion; service independent of user login; contacts at sharing time. The user
+subsequently requested username/password staff sign-in instead of the initial
+passcode demonstration. This is a Hanko authentication mode; Clarity still owns
+active staff membership and permission.
 
 Proposed here: `clarity-v2` sibling name, single dedicated cloud stack, direct S3
-intake followed by cloud Orthanc indexing, hosted Next.js inside Electron, email
-passcode baseline, configurable five/ten-minute discovery with five-minute
-default, a service installed preferably on the Orthanc host, fixed admin/staff
-roles and immutable dispatch snapshots.
+intake followed by cloud Orthanc indexing, hosted Next.js inside Electron,
+configurable five/ten-minute discovery with five-minute default, a service
+installed preferably on the Orthanc host, fixed admin/staff roles and immutable
+dispatch snapshots. The earlier email-passcode baseline is superseded by no-email
+Hanko username/password for staff. Public signup stays disabled, and an
+administrator provisions each account and Clarity role before first login.
+Password hashes belong in Hanko's database; Clarity stores only the identity link
+and staff membership. An administrator-controlled password reset procedure still
+needs acceptance. There is no mail integration for staff authentication.
 
 Unresolved inputs have IDs in section 6. No answer is inferred as approval of an
 external action. The plan can be reviewed while those release inputs remain open.
@@ -278,8 +297,8 @@ open the hosted `/sign-in` screen, and retain the staff session in the isolated
 Electron partition. Show a retryable setup/error state when the configured services
 are unreachable. The root `/` preview is not the desktop product. After successful
 Hanko authentication, require active Clarity database membership before showing
-the staff workspace. A Hanko registration without that membership reaches
-No access; it never creates a role. The left navigation must remain visible at
+the staff workspace. An unknown Hanko identity reaches No access and creates
+no Clarity staff row or role. The left navigation must remain visible at
 desktop and narrow widths, with Settings clearly reachable.
 
 Staff task: sign in → find automatically discovered study → check Ready/view →
@@ -309,8 +328,9 @@ dates or ages. Source updates must not overwrite staff contact fields.
 ### 3.2 Hanko identity and session integration
 
 [Hanko research](research/hanko.md) owns upstream findings and compatibility limits.
-V2 uses self-hosted Hanko with verified email passcode baseline and optional proven
-passkeys. Authentication records remain in Hanko; authorization remains in Clarity.
+V2 uses self-hosted Hanko with administrator-provisioned username/password
+accounts. Email authentication, email delivery and public signup are disabled.
+Authentication records remain in Hanko; authorization remains in Clarity.
 
 Planned owners: `libs/server/src/auth/hanko-session.ts`,
 `libs/server/src/auth/require-staff-access.ts`,
@@ -338,14 +358,14 @@ sequenceDiagram
     API-->>UI: Scoped result or no-access/unavailable state
 ```
 
-No-access registration is safe: Hanko sign-in never self-promotes a staff member.
-Bootstrap the first admin with an audited one-time operator procedure against a
-verified Hanko subject; subsequent grants require an active admin. Enforce at least
+Unknown Hanko identities receive No access without automatic staff enrollment.
+Bootstrap the first admin with an audited one-time operator procedure against an
+administrator-provisioned Hanko subject; subsequent grants require an active admin. Enforce at least
 one active admin under concurrency. Keep identity links unique by provider/issuer/
 subject. Do not auto-link by unverified email or copy credentials from Clerk.
-"Preconfigured users" means active Clarity staff memberships linked to verified
-Hanko subjects. Passwords or passcodes remain with Hanko; the Clarity database does
-not acquire a second password login path.
+"Preconfigured users" means Hanko username/password accounts linked by subject
+to active Clarity staff memberships. Hanko stores password verifiers in its own
+database; Clarity does not store passwords or acquire a second password login path.
 
 Use active-session validation, expiry checks and current membership at protected
 boundaries. Distinguish auth outage (503/unavailable) from invalid session (401)
@@ -777,7 +797,7 @@ presence or mock tests do not pass live gates.
 ### Phase 0 — Prove risky boundaries before building the product
 
 - [ ] P0.1 — Record resolved OI-01 and resolve OI-02/03/04; record selected source version, target OS/architecture, hosted-cloud interpretation, backfill choice and supported pinned toolchain in this plan.
-- [ ] P0.2 — Prototype packaged Hanko login/logout/recovery on real Windows/macOS with the chosen Elements/backend versions; prove no-access staff registration and optional passkey capability. Owners: `apps/desktop/`, `libs/server/src/auth/`. [Hosted Electron shell prototype](evidence/17-desktop-hosted-auth-shell.md) built; packaged two-OS login/recovery/passkey proof pending.
+- [ ] P0.2 — Prototype packaged Hanko username/password login/logout and administrator password reset on real Windows/macOS with the chosen Elements/backend versions; prove public signup disabled and unprovisioned identity denied. Owners: `apps/desktop/`, `libs/server/src/auth/`. [Hosted Electron shell prototype](evidence/17-desktop-hosted-auth-shell.md) built; packaged two-OS login/reset proof pending.
 - [ ] P0.3 — Prove a compiled TypeScript service installs, runs after logout/boot, accesses protected credentials and survives crash on both OS families; record wrapper/installer choice and signing prerequisites. Owners: `apps/sync-service/`, `deploy/installers/`. [Disposable macOS foreground proof](evidence/11-macos-lifecycle-probe.md) and [compiled unsigned package smoke](evidence/29-sync-service-package.md) passed; installed lifecycle, protected credential access and Windows execution remain pending.
 - [x] P0.4 — Measure representative synthetic Orthanc → intake S3 → cloud Orthanc path; verify index/readback, transfer overhead, source reset and late-instance signals. Decide one transport path with evidence before P3. [Bounded 769-instance benchmark and baseline signals](evidence/03-ingestion-proof.md) selected private intake → validating worker → cloud Orthanc; centre bandwidth/capacity remains OI-04.
 
@@ -794,12 +814,22 @@ release packaging.
 - [ ] P1.3 — Create dedicated V2 Docker stack, roles/volumes/networks and controlled migration jobs including Hanko; prove empty DB setup, readiness, replacement persistence and backup restore without touching V1. [Disposable stack proof](evidence/07-cloud-stack.md) passed with fifteen migrations, fenced role access, connected [device-to-Ready ingestion](evidence/26-connected-ingestion.md), authenticated viewer access, multipart recovery, compiled-service activation from a separate source Orthanc and fresh-volume restore; [Hanko protocol proof](evidence/09-hanko-protocol.md) and [Chromium cookie proof](evidence/16-staff-web-hanko.md) passed. Production HTTPS, independent key custody and final hosted topology remain pending.
 - [x] P1.4 — Extend ICM cards/contracts as source lands; integrate catalog/link/line/diagram checks in CI. Prove a cold routing walk to each implemented boundary. [ICM routing and parser evidence](evidence/05-map-routing.md).
 
+### Hosted synthetic test checkpoint — before Coolify testing
+
+These tasks make a remote test stack repeatable. They do not close P1.3 or P5.4,
+which require broader release evidence. Use only synthetic accounts and studies;
+retain every deployment volume and key across redeploys.
+
+- [x] CT.1 — Add a dedicated Coolify Compose definition and nonsecret configuration contract. Expose only the web, Hanko public API and a scoped HTTPS upload path; keep databases, cloud Orthanc, worker and storage administration private. Validate Compose rendering with placeholder values and no real credentials. Owner: `deploy/cloud/`. [Static preflight](evidence/47-coolify-test-preflight.md) passed for the separate synthetic stack; hosted behavior remains CT.3.
+- [ ] CT.2 — Provide and execute a repeatable hosted smoke check for HTTPS sign-in/no-access, admin pairing, synthetic Orthanc intake, signed upload, Ready/view, restart persistence and failures. A process health response alone is insufficient. Owners: `deploy/cloud/scripts/`, `docs/evidence/`. The [remote synthetic script](evidence/45-coolify-test-smoke.md) is prepared and source-contract checked but has not run against a hosted stack or proven pairing/restart.
+- [ ] CT.3 — Run the stack on a dedicated Coolify test host with domain/certificate and remote object-storage endpoints, stable secrets and backups. Execute CT.2 from a second host, record results and restore the synthetic data. This remains open until test infrastructure and access are supplied. Owners: deployment operator and `docs/evidence/`.
+
 ### Phase 2 — Hanko and staff dashboard skeleton
 
-- [x] P2.1 — Implement Hanko session adapter, normalized identity links, no-access registration and audited first-admin bootstrap. Verify valid/invalid/revoked/wrong-origin sessions and Hanko outage. [Two-identity protected web and browser cookie proof](evidence/16-staff-web-hanko.md), [server adapter](evidence/10-hanko-session-adapter.md) and [database-backed guard](evidence/13-staff-access-guard.md) passed. Packaged Electron behaviour remains a separate P0.2 gate.
+- [x] P2.1 — Implement Hanko session adapter, normalized identity links, no-access denial and audited first-admin bootstrap. Verify valid/invalid/revoked/wrong-origin sessions and Hanko outage. [Two-identity protected web and browser cookie proof](evidence/16-staff-web-hanko.md), [server adapter](evidence/10-hanko-session-adapter.md) and [database-backed guard](evidence/13-staff-access-guard.md) passed with the earlier open-registration profile; the staff-only guard now denies unknown identities without creating rows. Packaged Electron behaviour remains a separate P0.2 gate.
 - [x] P2.2 — Implement admin/staff authorization at every API, staff add/disable and last-admin protection. Use real DB concurrency tests and two real identities. [Audited SQL concurrency proof](evidence/12-staff-access-database.md) and [two-identity protected web proof](evidence/16-staff-web-hanko.md) passed for all current application APIs; future clinical APIs must enforce the same active membership boundary.
 - [x] P2.3 — Build compact Studies/Doctors/Settings navigation and sharing-form skeleton from approved UI primitives; verify labels, keyboard, narrow widths, errors, no patient data leakage and no implicit sends. [Synthetic UI evidence](evidence/02-staff-ui.md).
-- [ ] P2.4 — Make the installed Electron front door open Hanko sign-in with persisted trusted origins and retryable errors; after login show left Studies/Doctors/Settings navigation, while unapproved registration stays No access. Use the native framed window so macOS shows its traffic lights and Windows shows its caption buttons, with no in-page window controls. Owners: `apps/desktop/`, `apps/web/src/app/sign-in/`, `apps/web/src/app/staff/`. The [interactive synthetic desktop](evidence/41-interactive-synthetic-desktop-demo.md) signed in an active administrator and showed the left navigation from an isolated Electron profile. Packaged macOS/Windows launches, session expiry/logout and narrow navigation remain to prove.
+- [ ] P2.4 — Make the installed Electron front door open login-only Hanko sign-in with persisted trusted origins and retryable errors; after login show left Studies/Doctors/Settings navigation, while unknown identities stay No access. Use the native framed window so macOS shows its traffic lights and Windows shows its caption buttons, with no in-page window controls. Owners: `apps/desktop/`, `apps/web/src/app/sign-in/`, `apps/web/src/app/staff/`. The [interactive synthetic desktop](evidence/41-interactive-synthetic-desktop-demo.md) signed in an active administrator and showed the left navigation from an isolated Electron profile. Packaged macOS/Windows launches, session expiry/logout and narrow navigation remain to prove.
 
 ### Phase 3 — Local discovery and durable machine ingestion
 
@@ -844,17 +874,19 @@ exists. Use synthetic data; record commands, versions, actual results and limita
 | BR-04         | P2.3, P4.3–P4.4        | [Staff UI and browser viewer](evidence/25-viewer-and-sharing-ui.md): source-offline Ready search, scoped gateway and OHIF route                                                                                                      | P2.3 passed; one strict synthetic pixel pattern rendered at 1280×900; OHIF mobile layout and modality/codec breadth pending |
 | BR-05 / BR-06 | P6.2–P6.3              | `06-sharing.md`: contact entry, explicit send, verified provider state                                                                                                                                                               | Pending                                                                                                                     |
 | BR-07 / TR-12 | P6.1, P6.4             | `06-sharing.md`: recipient identity, expiry, frozen scope, bytes retained                                                                                                                                                            | Decision + implementation pending                                                                                           |
-| BR-08 / TR-13 | P0.2, P2.4             | Electron first-launch sign-in, Hanko subject plus active Clarity membership, No access for unapproved signup and left-navigation checks on both OS families                                                                          | Synthetic Electron admin sign-in and left navigation passed; packaged and both-OS proof pending                             |
+| BR-08 / TR-13 | P0.2, P2.4             | Electron first-launch login, preprovisioned Hanko subject plus active Clarity membership, unknown-identity denial and left-navigation checks on both OS families | Synthetic Electron admin sign-in and left navigation passed; packaged and both-OS proof pending |
 | BR-09 / TR-14 | P3.5, P5.1–P5.2        | Admin-only local Orthanc test/save, redacted read, private credential persistence, interval/restart and source-to-Ready after Electron quit                                                                                          | Synthetic test/save and five-minute post-quit Ready passed; installed continuity pending                                    |
 | BR-10 / TR-15 | P3.5                   | [In-window revision](evidence/42-in-window-source-settings.md): opening source connection keeps one Electron window; bundled form retains Settings navigation, returns to hosted Settings, and hosted renderer cannot read the secret | Native synthetic clickthrough, return and same-source test/save passed; installed proof pending                             |
 | BR-11         | P6.2                   | [Indian doctor UI correction](evidence/43-indian-doctor-directory-ui.md): styled directory, add/search, +91 input/display and synthetic browser check                         | Doctor groundwork passed in the disposable demo; external sharing remains gated                                               |
 | BR-12         | P2.4                   | [Native desktop window controls](evidence/44-desktop-window-controls.md): framed Electron window and focused macOS traffic-light check | macOS synthetic development shell proof; Windows and packaged acceptance pending |
+| BR-13         | P0.2, CT.3             | [Pinned Hanko username/password proof](evidence/46-hanko-username-password.md), [operator-only Clarity proof](evidence/48-staff-only-login.md), disabled public signup and hosted browser login/logout/no-access | Closed-signup Hanko and database operator proofs passed; Coolify and installed-browser acceptance pending |
 | TR-01         | P1.1–P1.2              | [Workspace checks](evidence/01-workspace-checks.md): frozen install, build/types, package exports                                                                                                                                    | P1.1/P1.2 passed                                                                                                            |
 | TR-02         | P0.3, P5.1–P5.3        | [Mac foreground lifecycle proof](evidence/11-macos-lifecycle-probe.md); later `05-installers.md`: clean OS install/lifecycle/update matrix                                                                                           | Packaged foreground/crash path passed; installed cross-OS lifecycle pending                                                 |
 | TR-03 / TR-07 | P3.1, P5.2             | `03-ingestion.md`: outbound-only network and independent credential tests                                                                                                                                                            | Pending                                                                                                                     |
 | TR-05         | P0.4, P3.3, P4.1–P4.2  | [Synthetic benchmark](evidence/03-ingestion-proof.md), [worker crash proof](evidence/15-worker-foundation.md), [manifest decisions](evidence/08-manifest-decisions.md) and [connected ingestion](evidence/26-connected-ingestion.md) | P0.4 passed; connected one-study admission and multipart recovery passed; centre capacity pending                           |
 | TR-08         | P1.3, P3.2–P3.4, P4.1  | [PostgreSQL](evidence/06-database-foundation.md), [SQLite](evidence/04-local-discovery.md), [cloud restore](evidence/07-cloud-stack.md) and [connected ingestion](evidence/26-connected-ingestion.md)                                | Persistence, worker and compiled service passed narrow synthetic proofs; broad crash/capacity pending                       |
 | TR-09         | P1.3, P5.1–P5.4        | Final images, signed artifacts, isolated restore and operational handoff                                                                                                                                                             | Pending                                                                                                                     |
+| TR-16         | CT.1–CT.3             | [Coolify preflight](evidence/47-coolify-test-preflight.md), remote HTTPS smoke and synthetic restore record                                                                                                                           | Static configuration passed; hosted execution pending                                                                        |
 | TR-10         | P1.4, P6.5             | [Map generator/checks and cold walk](evidence/05-map-routing.md); discussion sessions recorded                                                                                                                                       | P1.4 passed for current owners; release mapping pending                                                                     |
 | TR-11         | P1.1, P4.1, P4.3, P6.2 | Source provenance, selected ported tests plus new acceptance                                                                                                                                                                         | Pending                                                                                                                     |
 
@@ -887,7 +919,7 @@ installer or provider tests. Unimplemented scripts above are not runnable.
 | ----- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | OI-01 | Hanko versus literal Auth0 requirement                                                                     | **Resolved 2026-09-23:** user confirmed Hanko only for V2 staff identity; no Auth0 dependency                                                                                                                                        |
 | OI-02 | Centre OS, architecture, admin-install permission, service host and minimum OS versions                    | Orthanc host preferred; Windows x64/macOS Apple Silicon first; Intel support needs an explicit matrix                                                                                                                                |
-| OI-03 | Dedicated cloud host/domain, private bucket, SMTP and capacity                                             | User specified **synthetic only for now**; separate real V2 stack details remain open for hosted Hanko and storage tests. The disposable [MinIO proof](evidence/03-ingestion-proof.md) does not select a maintained production store |
+| OI-03 | Dedicated cloud host/domain, private bucket and capacity                                                   | User specified **synthetic only for now** and no mail integration; separate real V2 stack details remain open for hosted Hanko and storage tests. The disposable [MinIO proof](evidence/03-ingestion-proof.md) does not select a maintained production store |
 | OI-04 | Orthanc version/auth, stable-age behaviour, daily volume, typical/maximum study size and historical intake | User specified **synthetic only for now**; real source details/backfill remain open. Five-minute incremental polling is proposed; no unbounded archive copy                                                                          |
 | OI-05 | Installer signing identities, service wrapper/packager license and update ownership                        | Signed installers and coordinated manual upgrade first; gates distribution                                                                                                                                                           |
 | OI-06 | Recipient verification method and account requirement                                                      | Preserve verified scoped access; staff-only pilot until decided/proven; no automatic bearer-link downgrade                                                                                                                           |

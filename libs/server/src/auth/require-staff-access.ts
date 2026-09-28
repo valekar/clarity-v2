@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import type { StaffRepository } from "@clarity/database/staff-repository";
 import type { HankoIdentity, HankoSessionResult } from "./hanko-session.js";
 
@@ -19,7 +18,7 @@ export type StaffAccessGuardOptions = Readonly<{
   sessionAdapter: Readonly<{
     validateCookie(cookieHeader: string | null | undefined): Promise<HankoSessionResult>;
   }>;
-  repository: Pick<StaffRepository, "findCurrentByHankoIdentity" | "enrollPendingHankoIdentity">;
+  repository: Pick<StaffRepository, "findCurrentByHankoIdentity">;
 }>;
 
 const unauthenticated: StaffAccessResult = Object.freeze({
@@ -56,16 +55,7 @@ export function createStaffAccessGuard(options: StaffAccessGuardOptions) {
     try {
       const identity = identityForLookup(session.identity);
       const current = await options.repository.findCurrentByHankoIdentity(identity);
-      if (!current) {
-        await options.repository.enrollPendingHankoIdentity({
-          staffUserId: randomUUID(),
-          identityId: randomUUID(),
-          displayName: session.identity.verifiedEmail,
-          issuer: identity.issuer,
-          subject: identity.subject,
-        });
-        return forbidden;
-      }
+      if (!current) return forbidden;
       if (!current.active || current.membership?.status !== "active") return forbidden;
       if (!current.membership) return forbidden;
       return {

@@ -16,6 +16,9 @@ viewer_browser_hold="${CLARITY_VIEWER_BROWSER_HOLD_SECONDS:-0}"
 compiled_sync_proof="${CLARITY_COMPILED_SYNC_PROOF:-0}"
 interactive_synthetic_demo="${CLARITY_INTERACTIVE_SYNTHETIC_DEMO:-0}"
 demo_state_dir="${CLARITY_SYNTHETIC_DEMO_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/clarity-v2/synthetic-demo}"
+reused_image_tags=()
+demo_web_image_source="${CLARITY_INTERACTIVE_DEMO_WEB_IMAGE:-}"
+demo_worker_image_source="${CLARITY_INTERACTIVE_DEMO_WORKER_IMAGE:-}"
 if [[ "$interactive_synthetic_demo" == 1 ]]; then
   viewer_proof=1
   compiled_sync_proof=1
@@ -59,7 +62,13 @@ if ! docker compose version >/dev/null; then
 fi
 
 random_secret() { openssl rand -hex 24; }
-hanko_port="$(port)"
+hanko_port="${CLARITY_INTERACTIVE_DEMO_HANKO_PORT:-$(port)}"
+if [[ -n "${CLARITY_INTERACTIVE_DEMO_HANKO_PORT:-}" ]]; then
+  if [[ "$interactive_synthetic_demo" != 1 || ! "$hanko_port" =~ ^[0-9]{1,5}$ || "$hanko_port" -lt 1024 || "$hanko_port" -gt 65535 ]]; then
+    echo 'CLARITY_INTERACTIVE_DEMO_HANKO_PORT must be a nonprivileged port for the interactive synthetic demo.' >&2
+    exit 2
+  fi
+fi
 orthanc_port="$(port)"
 mailpit_port="$(port)"
 minio_port="$(port)"
@@ -102,10 +111,19 @@ set +a
 
 write_hanko_config() {
   local path="$1" user="$2" password="$3"
+  local signup=true mail_enabled=true password_enabled=false deletion=true
+  local username_config=''
+  if [[ "$interactive_synthetic_demo" == 1 ]]; then
+    signup=false
+    mail_enabled=false
+    password_enabled=true
+    deletion=false
+    username_config=$'username:\n  enabled: true\n  optional: false\n  acquire_on_registration: true\n  acquire_on_login: true\n  use_as_login_identifier: true'
+  fi
   cat >"$path" <<EOF
 account:
-  allow_deletion: true
-  allow_signup: true
+  allow_deletion: $deletion
+  allow_signup: $signup
 database:
   user: $user
   password: $password
@@ -114,12 +132,14 @@ database:
   database: hanko
   dialect: postgres
 email:
-  enabled: true
-  optional: false
+  enabled: $mail_enabled
+  optional: true
+  acquire_on_registration: false
+  acquire_on_login: false
   require_verification: true
   passcode_ttl: 300
 email_delivery:
-  enabled: true
+  enabled: $mail_enabled
   from_address: no-reply@clarity.invalid
   from_name: Clarity V2 synthetic proof
   smtp:
@@ -130,12 +150,18 @@ mfa:
 passkey:
   enabled: false
 password:
-  enabled: false
-  optional: true
+  enabled: $password_enabled
+  optional: false
+  acquire_on_registration: always
+  acquire_on_login: always
+  recovery: false
+$username_config
 secrets:
   keys:
     - $HANKO_SECRET_ENCRYPTION_KEY
 server:
+  admin:
+    address: "127.0.0.1:8001"
   public:
     address: "0.0.0.0:8000"
 cors:
@@ -240,6 +266,7 @@ finish() {
 cleanup() {
   compose "$project" down --volumes --remove-orphans >/dev/null 2>&1 || true
   compose "$restore_project" down --volumes --remove-orphans >/dev/null 2>&1 || true
+  for image_tag in "${reused_image_tags[@]}"; do docker image rm "$image_tag" >/dev/null 2>&1 || true; done
   rm -rf "$proof_dir"
 }
 trap finish EXIT
@@ -297,7 +324,11 @@ mc_run() {
 
 cd "$repo_root"
 compose "$project" build clarity-migrate
-compose "$project" up --detach postgres minio mailpit
+if [[ "$interactive_synthetic_demo" == 1 ]]; then
+  compose "$project" up --detach postgres minio
+else
+  compose "$project" up --detach postgres minio mailpit
+fi
 wait_healthy "${project}-postgres-1"
 compose "$project" up --detach clarity-migrate hanko-migrate minio-init
 wait_completed "${project}-clarity-migrate-1"
@@ -427,7 +458,34 @@ ORTHANC_PROOF_PASSWORD="$ORTHANC_HTTP_PASSWORD" \
 echo "Initial runtime proof passed: schema migrations, Hanko v3 readiness/config, Orthanc PG index + S3 object + DICOMweb readback ($instance_id)."
 
 if [[ "$app_proof" == 1 ]]; then
-  compose "$project" build web worker
+  if [[ -n "$demo_web_image_source" || -n "$demo_worker_image_source" ]]; then
+    if [[ "$interactive_synthetic_demo" != 1 || -z "$demo_web_image_source" || -z "$demo_worker_image_source" ]]; then
+      echo 'Set both CLARITY_INTERACTIVE_DEMO_WEB_IMAGE and CLARITY_INTERACTIVE_DEMO_WORKER_IMAGE only for the interactive synthetic demo.' >&2
+      exit 2
+    fi
+    demo_web_image_id="$(docker image inspect --format '{{.Id}}' "$demo_web_image_source" 2>/dev/null)" || {
+      echo "Web image does not exist locally: $demo_web_image_source" >&2
+      exit 2
+    }
+    demo_worker_image_id="$(docker image inspect --format '{{.Id}}' "$demo_worker_image_source" 2>/dev/null)" || {
+      echo "Worker image does not exist locally: $demo_worker_image_source" >&2
+      exit 2
+    }
+    demo_web_image_tag="${project}-web:latest"
+    demo_worker_image_tag="${project}-worker:latest"
+    docker image tag "$demo_web_image_id" "$demo_web_image_tag"
+    reused_image_tags+=("$demo_web_image_tag")
+    docker image tag "$demo_worker_image_id" "$demo_worker_image_tag"
+    reused_image_tags+=("$demo_worker_image_tag")
+    [[ "$(docker image inspect --format '{{.Id}}' "$demo_web_image_tag")" == "$demo_web_image_id" &&
+       "$(docker image inspect --format '{{.Id}}' "$demo_worker_image_tag")" == "$demo_worker_image_id" ]] || {
+      echo 'A temporary Compose image tag does not match its validated source image.' >&2
+      exit 1
+    }
+    echo "Interactive demo reusing validated local images: web=$demo_web_image_id worker=$demo_worker_image_id"
+  else
+    compose "$project" build web worker
+  fi
   compose "$project" up --detach intake-init web worker
   wait_completed "${project}-intake-init-1"
   wait_healthy "${project}-web-1"
@@ -445,6 +503,10 @@ if [[ "$app_proof" == 1 ]]; then
 fi
 
 if [[ "$viewer_proof" == 1 ]]; then
+  if [[ "$interactive_synthetic_demo" == 1 ]]; then
+    source "$cloud_dir/scripts/provision-interactive-demo-admin.sh"
+    provision_interactive_demo_admin "$project" "$demo_state_dir" "$HANKO_ISSUER" "$cloud_dir"
+  else
   nonce_admin="$(openssl rand -hex 8)"
   nonce_staff="$(openssl rand -hex 8)"
   python3 "$cloud_dir/scripts/prove-hanko-flow.py" \
@@ -480,6 +542,7 @@ if [[ "$viewer_proof" == 1 ]]; then
     psql -X --set ON_ERROR_STOP=1 -U clarity_v2_bootstrap_login -d clarity_v2_app \
     --command "SELECT bootstrap_first_staff_admin('$admin_user_id', '$admin_identity_id');" >/dev/null
   echo 'Two synthetic Hanko identities were enrolled and the connected-ingestion administrator was bootstrapped.'
+  fi
 fi
 
 if [[ "$connected_proof" == 1 ]]; then
@@ -528,11 +591,12 @@ if [[ "$compiled_sync_proof" == 1 ]]; then
   CLARITY_INTERACTIVE_SYNTHETIC_DEMO="$interactive_synthetic_demo" \
   CLARITY_SYNC_CONFIG_PATH="${CLARITY_SYNC_CONFIG_PATH:-$demo_state_dir/sync-service.json}" \
   CLARITY_SYNTHETIC_DEMO_MANIFEST="$demo_state_dir/demo.json" \
-  CLARITY_SYNTHETIC_DEMO_ADMIN="$proof_dir/viewer-admin.json" \
-  CLARITY_SYNTHETIC_DEMO_STAFF="$proof_dir/viewer-staff.json" \
+  CLARITY_SYNTHETIC_DEMO_ADMIN="$([[ "$interactive_synthetic_demo" == 1 ]] && printf '%s' "$demo_state_dir/demo-admin.json" || printf '%s' "$proof_dir/viewer-admin.json")" \
+  CLARITY_SYNTHETIC_DEMO_STAFF="$([[ "$interactive_synthetic_demo" == 1 ]] && printf '%s' "$demo_state_dir/demo-admin.json" || printf '%s' "$proof_dir/viewer-staff.json")" \
+  CLARITY_SYNTHETIC_DEMO_PASSWORD_FILE="$([[ "$interactive_synthetic_demo" == 1 ]] && printf '%s' "$demo_state_dir/admin-password.txt" || true)" \
   CLARITY_SYNTHETIC_DEMO_DASHBOARD_URL="http://localhost:$web_port" \
   CLARITY_SYNTHETIC_DEMO_HANKO_URL="http://localhost:$hanko_port" \
-  CLARITY_SYNTHETIC_DEMO_MAILPIT_URL="http://localhost:$mailpit_port" \
+  CLARITY_SYNTHETIC_DEMO_MAILPIT_URL="" \
   CLARITY_SYNTHETIC_DEMO_ELECTRON="$interactive_synthetic_demo" \
   CLARITY_SYNC_CONFIG_WRITER="$repo_root/apps/sync-service/dist/main.js" \
   CLARITY_NODE_EXECUTABLE="$(command -v node)" \

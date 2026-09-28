@@ -1,0 +1,157 @@
+name: clarity-v2-coolify-test
+
+services:
+  postgres:
+    image: postgres:18.6-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${PG_BOOTSTRAP_PASSWORD:?set a unique random value}
+      POSTGRES_DB: postgres
+      PGDATA: /var/lib/postgresql/18/docker
+      CLARITY_MIGRATOR_PASSWORD: ${CLARITY_MIGRATOR_PASSWORD:?required}
+      CLARITY_RUNTIME_PASSWORD: ${CLARITY_RUNTIME_PASSWORD:?required}
+      CLARITY_WORKER_PASSWORD: ${CLARITY_WORKER_PASSWORD:?required}
+      CLARITY_DEVICE_AUTH_PASSWORD: ${CLARITY_DEVICE_AUTH_PASSWORD:?required}
+      HANKO_MIGRATOR_PASSWORD: ${HANKO_MIGRATOR_PASSWORD:?required}
+      HANKO_RUNTIME_PASSWORD: ${HANKO_RUNTIME_PASSWORD:?required}
+      ORTHANC_RUNTIME_PASSWORD: ${ORTHANC_RUNTIME_PASSWORD:?required}
+    volumes:
+      - postgres_data:/var/lib/postgresql
+      - ../postgres/init-roles.sql:/docker-entrypoint-initdb.d/010-roles.sql:ro
+      - ../postgres/020-device-auth-role.sh:/docker-entrypoint-initdb.d/020-device-auth-role.sh:ro
+    networks: [private]
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U postgres -d postgres]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  clarity-migrate:
+    build:
+      context: ../../..
+      dockerfile: deploy/cloud/Dockerfile.clarity-migrate
+    environment:
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGDATABASE: clarity_v2_app
+      PGUSER: clarity_v2_migrator
+      PGPASSWORD: ${CLARITY_MIGRATOR_PASSWORD:?required}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [private]
+    restart: "no"
+
+  hanko-migrate:
+    image: ghcr.io/teamhanko/hanko:v3.0.4@sha256:a63ff255a85623723878bbc59f3797abc92ba32d0fcc580c6f1a28a66d51dc9c
+    command: [migrate, up, --config, /config/hanko-migrate.yaml]
+    volumes:
+      - ${HANKO_CONFIG_DIR:?run prepare.sh and set this host path}/hanko-migrate.yaml:/config/hanko-migrate.yaml:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [private]
+    restart: "no"
+
+  hanko:
+    image: ghcr.io/teamhanko/hanko:v3.0.4@sha256:a63ff255a85623723878bbc59f3797abc92ba32d0fcc580c6f1a28a66d51dc9c
+    command: [serve, all, --config, /config/hanko-runtime.yaml]
+    volumes:
+      - ${HANKO_CONFIG_DIR:?run prepare.sh and set this host path}/hanko-runtime.yaml:/config/hanko-runtime.yaml:ro
+    expose: [8000]
+    depends_on:
+      hanko-migrate:
+        condition: service_completed_successfully
+    networks: [private]
+    healthcheck:
+      test: [CMD, /hanko, isready, --config, /config/hanko-runtime.yaml, public]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  orthanc:
+    image: orthancteam/orthanc:26.8.2@sha256:9758c8702a89abece99fcfe6d5571d5eaae59587e8e1ce36b9aafc8d4f24457b
+    command: [/tmp/orthanc.json]
+    volumes:
+      - ${HANKO_CONFIG_DIR:?run prepare.sh and set this host path}/orthanc.json:/etc/orthanc/00-proof.json:ro
+      - orthanc_files:/var/lib/orthanc/db
+    expose: [8042]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [private]
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ../../..
+      dockerfile: deploy/cloud/Dockerfile.web
+      args:
+        NEXT_PUBLIC_HANKO_API_URL: ${HANKO_PUBLIC_API_URL:?must be public HTTPS URL}
+    environment:
+      DATABASE_URL: postgresql://clarity_v2_runtime:${CLARITY_RUNTIME_PASSWORD:?required}@postgres:5432/clarity_v2_app
+      CLARITY_DEVICE_AUTH_DATABASE_URL: postgresql://clarity_v2_device_auth_login:${CLARITY_DEVICE_AUTH_PASSWORD:?required}@postgres:5432/clarity_v2_app
+      HANKO_API_ORIGIN: http://hanko:8000
+      HANKO_ISSUER: ${HANKO_ISSUER:?must match Hanko public origin}
+      HANKO_AUDIENCE: ${HANKO_AUDIENCE:?required}
+      NEXT_PUBLIC_HANKO_API_URL: ${HANKO_PUBLIC_API_URL:?must be public HTTPS URL}
+      CLARITY_PUBLIC_ORIGIN: ${CLARITY_PUBLIC_ORIGIN:?must be public HTTPS URL}
+      CLOUD_ORTHANC_URL: http://orthanc:8042/
+      CLOUD_ORTHANC_DICOMWEB_URL: http://orthanc:8042/dicom-web/
+      CLOUD_ORTHANC_USERNAME: ${ORTHANC_HTTP_USERNAME:?required}
+      CLOUD_ORTHANC_PASSWORD: ${ORTHANC_HTTP_PASSWORD:?required}
+      INTAKE_S3_ENDPOINT: ${INTAKE_S3_ENDPOINT:?dedicated test S3 endpoint required}
+      INTAKE_S3_PUBLIC_ENDPOINT: ${INTAKE_S3_PUBLIC_ENDPOINT:?public HTTPS S3 endpoint required}
+      INTAKE_S3_BUCKET: ${INTAKE_S3_BUCKET:?dedicated empty test bucket required}
+      INTAKE_S3_REGION: ${INTAKE_S3_REGION:?required}
+      INTAKE_S3_ACCESS_KEY: ${INTAKE_S3_WEB_ACCESS_KEY:?scoped upload key required}
+      INTAKE_S3_SECRET_KEY: ${INTAKE_S3_WEB_SECRET_KEY:?required}
+    expose: [3000]
+    depends_on:
+      clarity-migrate:
+        condition: service_completed_successfully
+      hanko:
+        condition: service_healthy
+    networks: [private]
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/api/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ../../..
+      dockerfile: deploy/cloud/Dockerfile.worker
+    environment:
+      DATABASE_URL: postgresql://clarity_v2_worker:${CLARITY_WORKER_PASSWORD:?required}@postgres:5432/clarity_v2_app
+      WORKER_STAGING_DIR: /app/staging
+      INTAKE_S3_ENDPOINT: ${INTAKE_S3_ENDPOINT:?dedicated test S3 endpoint required}
+      INTAKE_S3_BUCKET: ${INTAKE_S3_BUCKET:?dedicated empty test bucket required}
+      INTAKE_S3_REGION: ${INTAKE_S3_REGION:?required}
+      INTAKE_S3_ACCESS_KEY: ${INTAKE_S3_WORKER_ACCESS_KEY:?scoped worker key required}
+      INTAKE_S3_SECRET_KEY: ${INTAKE_S3_WORKER_SECRET_KEY:?required}
+      CLOUD_ORTHANC_URL: http://orthanc:8042/
+      CLOUD_ORTHANC_USERNAME: ${ORTHANC_HTTP_USERNAME:?required}
+      CLOUD_ORTHANC_PASSWORD: ${ORTHANC_HTTP_PASSWORD:?required}
+    volumes:
+      - worker_staging:/app/staging
+    depends_on:
+      clarity-migrate:
+        condition: service_completed_successfully
+      orthanc:
+        condition: service_started
+    networks: [private]
+    restart: unless-stopped
+
+networks:
+  private: {}
+
+volumes:
+  postgres_data:
+  orthanc_files:
+  worker_staging:

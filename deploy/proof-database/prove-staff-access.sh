@@ -31,14 +31,15 @@ expect_sqlstate() {
   fi
 }
 
-runtime_psql --file deploy/proof-database/staff-access-proof.sql >/dev/null
+expect_sqlstate 42501 "$log_one" runtime_psql --command "SELECT public.enroll_pending_hanko_identity('00000000-0000-4000-8000-000000000099', '10000000-0000-4000-8000-000000000099', 'Denied Runtime', 'https://hanko.example.invalid', 'denied-runtime');"
+psql --no-psqlrc --set ON_ERROR_STOP=1 --file deploy/proof-database/staff-access-proof.sql >/dev/null
 
 enrollment_sql_one="BEGIN; SELECT pg_sleep(0.25); SELECT enroll_pending_hanko_identity('00000000-0000-4000-8000-000000000003', '10000000-0000-4000-8000-000000000003', 'Concurrent Candidate Three', 'https://hanko.example.invalid', 'synthetic-subject-three'); SELECT pg_sleep(0.5); COMMIT;"
 enrollment_sql_two="BEGIN; SELECT pg_sleep(0.25); SELECT enroll_pending_hanko_identity('00000000-0000-4000-8000-000000000004', '10000000-0000-4000-8000-000000000004', 'Concurrent Candidate Four', 'https://hanko.example.invalid', 'synthetic-subject-three'); SELECT pg_sleep(0.5); COMMIT;"
-runtime_psql --command "$enrollment_sql_one" >"$log_one" 2>&1 &
+operator_psql --command "$enrollment_sql_one" >"$log_one" 2>&1 &
 enrollment_one_pid=$!
 sleep 0.05
-runtime_psql --command "$enrollment_sql_two" >"$log_two" 2>&1 &
+operator_psql --command "$enrollment_sql_two" >"$log_two" 2>&1 &
 enrollment_two_pid=$!
 set +e
 wait "$enrollment_one_pid"

@@ -28,15 +28,6 @@ export type StaffRepository = Readonly<{
   findCurrentByHankoIdentity(identity: HankoStaffIdentity): Promise<CurrentStaffAccess | null>;
   findStaffUserById(staffUserId: string): Promise<StaffDirectoryEntry | null>;
   listStaffUsers(input: Readonly<{ limit: number; afterId?: string }>): Promise<StaffDirectoryPage>;
-  enrollPendingHankoIdentity(
-    input: Readonly<{
-      staffUserId: string;
-      identityId: string;
-      displayName: string;
-      issuer: string;
-      subject: string;
-    }>,
-  ): Promise<string>;
   changeMembership(
     input: Readonly<{
       actorUserId: string;
@@ -217,23 +208,6 @@ export function createStaffRepository(pool: Pool): StaffRepository {
         entries: Object.freeze(entries),
         nextCursor: hasMore ? (entries[entries.length - 1]?.staffUserId ?? null) : null,
       });
-    },
-
-    async enrollPendingHankoIdentity(input): Promise<string> {
-      const result = await pool.query<{ staff_user_id: unknown } & QueryResultRow>({
-        text: "SELECT public.enroll_pending_hanko_identity($1, $2, $3, $4, $5) AS staff_user_id",
-        values: [
-          requiredText("Staff user ID", input.staffUserId, 64),
-          requiredText("Hanko identity ID", input.identityId, 64),
-          requiredText("Display name", input.displayName, 320),
-          requiredText("Hanko issuer", input.issuer, 2_048),
-          requiredText("Hanko subject", input.subject, 512),
-        ],
-      });
-      const staffUserId = result.rows[0]?.staff_user_id;
-      if (typeof staffUserId !== "string")
-        throw new Error("Identity enrollment returned an invalid staff user ID.");
-      return staffUserId;
     },
 
     async changeMembership(input): Promise<boolean> {

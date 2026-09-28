@@ -4,8 +4,8 @@ type: object
 title: Hanko identity and staff access
 universe: live
 status: verified
-updated: 2026-09-24
-revision: in-window-source-settings-2026-09-24
+updated: 2026-09-27
+revision: staff-demo-run-2026-09-27
 ---
 
 # Hanko identity and staff access
@@ -16,8 +16,9 @@ Hanko identity links identify people; Clarity membership controls actions.
 
 ## Why this shape
 
-Registration is not centre authorization. Persistent synchronization must not
-depend on a human session, and email/phone text cannot be the user primary key.
+Only administrator-provisioned staff may authenticate. Persistent synchronization
+must not depend on a human session, and email/phone text cannot be the user
+primary key.
 
 ## Shape
 
@@ -32,9 +33,16 @@ It did not grant application access. The Hanko adapter and application
 authorization are separate boundaries. The
 [server-only adapter](../../libs/server/src/auth/hanko-session.ts) validates
 sessions with [focused synthetic tests](../../docs/evidence/10-hanko-session-adapter.md).
+The adapter now accepts a Hanko-validated session without an email claim for
+the username/password test profile, using a neutral display label if needed.
+A present malformed or unverified email remains denied; issuer and
+subject still own the identity link. A separate
+[provider proof](../../docs/evidence/46-hanko-username-password.md) passed
+disposable no-email Hanko registration, login, validation and logout.
 The [typed repository](../../libs/database/src/staff-repository.ts) and
 [access guard](../../libs/server/src/auth/require-staff-access.ts) now re-read
-active membership for each check. A [disposable PostgreSQL integration proof](../../docs/evidence/13-staff-access-guard.md)
+active membership for each check. The guard now denies unknown identities
+without creating staff rows. A [disposable PostgreSQL integration proof](../../docs/evidence/13-staff-access-guard.md)
 combines that database with synthetic Hanko HTTP responses. The
 [protected web routes](../../apps/web/src/app/api/staff/access/route.ts) and
 [two-identity provider proof](../../docs/evidence/16-staff-web-hanko.md) now
@@ -72,15 +80,25 @@ The two-account proof forwarded provider-issued cookies over HTTP. A later
 [Chromium proof](../../docs/evidence/16-staff-web-hanko.md) verified a Secure
 HttpOnly session across localhost Hanko/web ports and pending-staff denial.
 The [interactive synthetic desktop](../../docs/evidence/41-interactive-synthetic-desktop-demo.md)
-signed in a disposable preapproved administrator, showed the left
-Studies/Doctors/Settings navigation and opened the earlier bundled local source
-window after a fresh administrator check. The subsequent in-window Settings
-revision passed a native synthetic clickthrough. Electron packaging and
+first signed in a disposable preapproved administrator with the earlier passcode
+profile. A 27 September fresh rerun signed in with the administrator-provisioned
+username/password, no signup or email step, and showed the left
+Studies/Doctors/Settings navigation, one active staff administrator and
+in-window source settings. Electron packaging and
 a hosted production V2 identity service remain unproven. No approved production
 V2 staff user exists yet. The Hanko membership guard still owns access.
+The [Coolify synthetic test profile](../../deploy/cloud/coolify-test/README.md)
+configures username/password without email or recovery. The updated profile
+disables public signup and requires explicit operator enrollment plus
+administrator role approval. [Disposable provider](../../docs/evidence/46-hanko-username-password.md)
+and [database proofs](../../docs/evidence/48-staff-only-login.md) passed. Hosted
+shared-cookie scope and browser sign-in remain acceptance gates.
 
 ## See
 
 [Hanko research and V1 impact](../../docs/research/hanko.md).
 [Desktop onboarding clarification](../sessions/2026-09-24-desktop-onboarding-source-settings.md).
 [In-window Settings correction](../sessions/2026-09-24-in-window-source-settings.md).
+[Coolify username/password test checkpoint](../sessions/2026-09-27-coolify-test-readiness.md).
+[Staff-only login decision](../sessions/2026-09-27-staff-only-login.md).
+[Staff-only Electron live run](../sessions/2026-09-27-staff-demo-run.md).

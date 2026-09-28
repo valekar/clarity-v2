@@ -5,6 +5,7 @@ import {
   createHankoSessionAdapter,
   type HankoSessionAdapterOptions,
 } from "../src/auth/hanko-session.ts";
+import { createStaffAccessGuard } from "../src/auth/require-staff-access.ts";
 
 const issuer = "https://auth.synthetic.invalid";
 const audience = "clarity-synthetic-web";
@@ -76,6 +77,7 @@ test("forwards only the named cookie to the fixed passive validation endpoint", 
           issuer,
           subject,
           sessionId,
+          displayName: "staff@example.invalid",
           verifiedEmail: "staff@example.invalid",
           expiresAt: new Date(futureExpiration),
         });
@@ -169,6 +171,7 @@ test("maps malformed successful provider DTOs to 503", async () => {
     sessionResponse({ expiration: "not-rfc3339" }),
     sessionResponse({ expiration: "2099-02-30T00:00:00Z" }),
     sessionResponse({ email: { address: "no-email", is_verified: true } }),
+    sessionResponse({ email: null }),
     { ...sessionResponse(), idle_expires_at: 42 },
     { ...sessionResponse(), idle_expires_at: "not-rfc3339" },
   ];
@@ -184,6 +187,71 @@ test("maps malformed successful provider DTOs to 503", async () => {
       reason: "auth-unavailable",
     });
   }
+});
+
+test("accepts validated sessions with no email and uses a neutral stable display name", async () => {
+  const claimsWithoutEmail = { ...sessionResponse().claims, email: undefined };
+  const noEmailSession = {
+    is_valid: true,
+    claims: { ...claimsWithoutEmail, username: "unverified-user-display" },
+  };
+  const adapter = createHankoSessionAdapter(
+    adapterOptions("https://auth.synthetic.invalid", {
+      fetcher: async () => new Response(JSON.stringify(noEmailSession), { status: 200 }),
+    }),
+  );
+  const result = await adapter.validateCookie("hanko=opaque");
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    assert.deepEqual(result.identity, {
+      issuer,
+      subject,
+      sessionId,
+      displayName: "Clarity staff member",
+      expiresAt: new Date(futureExpiration),
+    });
+    assert.equal("verifiedEmail" in result.identity, false);
+  }
+});
+
+test("denies unprovisioned no-email identity and accepts an explicitly linked subject", async () => {
+  const claimsWithoutEmail = { ...sessionResponse().claims, email: undefined };
+  const adapter = createHankoSessionAdapter(
+    adapterOptions("https://auth.synthetic.invalid", {
+      fetcher: async () =>
+        new Response(
+          JSON.stringify({
+            is_valid: true,
+            claims: { ...claimsWithoutEmail, username: "spoofed-display-name" },
+          }),
+          { status: 200 },
+        ),
+    }),
+  );
+  let approved = false;
+  const repository = {
+    async findCurrentByHankoIdentity(identity: { issuer: string; subject: string }) {
+      assert.deepEqual(identity, { issuer, subject });
+      return approved
+        ? {
+            staffUserId: "682a5f80-1afc-4da9-a3e2-35f00cf3de73",
+            active: true,
+            membership: { role: "staff" as const, status: "active" as const, version: "1" },
+          }
+        : null;
+    },
+  };
+  const guard = createStaffAccessGuard({ sessionAdapter: adapter, repository });
+  assert.deepEqual(await guard.requireStaffRead("hanko=opaque"), {
+    ok: false,
+    status: 403,
+    reason: "forbidden",
+  });
+  approved = true;
+  assert.deepEqual(await guard.requireStaffRead("hanko=opaque"), {
+    ok: true,
+    principal: { staffUserId: "682a5f80-1afc-4da9-a3e2-35f00cf3de73", role: "staff" },
+  });
 });
 
 test("validates optional idle expiry as identity validity evidence", async () => {

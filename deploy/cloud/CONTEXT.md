@@ -47,3 +47,22 @@ as a build argument because Next.js embeds that value in browser assets. The
 worker image deploys only its production package closure. Both are synthetic
 runtime artifacts; deployment still needs a final V2 service topology, scoped
 secrets and maintained object storage.
+
+The separate [Coolify synthetic test stack](coolify-test/README.md) now has a
+versioned Compose file, persistent V2-only volumes, private PostgreSQL/Orthanc,
+HTTPS web/Hanko proxy targets, an external scoped S3 intake contract and a
+private configuration generator. Its
+[static preflight](../../docs/evidence/47-coolify-test-preflight.md) passed on
+2026-09-27. The [remote smoke script](scripts/coolify-smoke.mjs) has not run
+against a hosted stack; test domains, object storage, browser login, restart and
+restore acceptance remain open. This configuration uses a local Orthanc file
+volume and cannot establish production storage durability.
+
+The interactive local launcher `bash deploy/cloud/scripts/run-synthetic-demo.sh`
+uses the current staff-only username/password Hanko profile. It disables public
+signup and email delivery, provisions and bootstraps one synthetic Clarity
+administrator, and prints that demo-only username/password after startup. Private
+credentials are also stored in `demo.json` and `admin-password.txt` under the
+mode-`0700` per-user demo directory; both files are mode `0600`. Mailpit is not
+started for this profile. Ctrl-C removes only the disposable Compose project and
+volumes; local demo credentials and sync state remain for inspection/reopen.

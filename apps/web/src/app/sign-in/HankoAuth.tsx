@@ -37,7 +37,7 @@ export function HankoAuth() {
           Connecting to the configured sign-in service…
         </p>
       )}
-      <hanko-auth />
+      <hanko-login />
     </div>
   );
 }

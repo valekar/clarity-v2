@@ -25,6 +25,7 @@ const demoStaffPath = process.env.CLARITY_SYNTHETIC_DEMO_STAFF;
 const demoDashboardUrl = process.env.CLARITY_SYNTHETIC_DEMO_DASHBOARD_URL;
 const demoHankoUrl = process.env.CLARITY_SYNTHETIC_DEMO_HANKO_URL;
 const demoMailpitUrl = process.env.CLARITY_SYNTHETIC_DEMO_MAILPIT_URL;
+const demoAdminPasswordFile = process.env.CLARITY_SYNTHETIC_DEMO_PASSWORD_FILE;
 const launchElectron = process.env.CLARITY_SYNTHETIC_DEMO_ELECTRON === "1";
 const configWriterPath = process.env.CLARITY_SYNC_CONFIG_WRITER;
 const pnpm = process.env.PNPM ?? "pnpm";
@@ -60,7 +61,7 @@ if (
     !demoManifestPath ||
     !demoDashboardUrl ||
     !demoHankoUrl ||
-    !demoMailpitUrl ||
+    !demoAdminPasswordFile ||
     !configWriterPath)
 ) {
   throw new Error(
@@ -543,6 +544,7 @@ try {
       dashboardUrl: demoDashboardUrl,
       hankoUrl: demoHankoUrl,
       mailpitUrl: demoMailpitUrl,
+      adminPasswordFile: demoAdminPasswordFile,
       configPath: syncConfigPath,
       configWriterPath,
       manifestPath: demoManifestPath,

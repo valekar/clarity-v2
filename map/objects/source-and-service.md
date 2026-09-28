@@ -4,8 +4,8 @@ type: object
 title: Private source and synchronization service
 universe: live
 status: verified
-updated: 2026-09-24
-revision: in-window-source-settings-2026-09-24
+updated: 2026-09-27
+revision: staff-demo-run-2026-09-27
 ---
 
 # Private source and synchronization service
@@ -65,7 +65,9 @@ same left navigation and a return path. The earlier separate-window design
 tested and saved the source in the
 [interactive proof](../../docs/evidence/41-interactive-synthetic-desktop-demo.md);
 the in-window revision also passed a native synthetic clickthrough, return and
-same-source test/save. The saved five-minute poll admitted a second
+same-source test/save. A later [staff-only live rerun](../sessions/2026-09-27-staff-demo-run.md)
+used that in-window form to test and save a separate loopback Orthanc source,
+then opened a newly synced Ready CT in Electron. The saved five-minute poll admitted a second
 synthetic CT after Electron exited.
 Installed-service ownership remains unverified. A
 [scoped S3 admission helper](../../libs/storage/src/upload-admission.ts)

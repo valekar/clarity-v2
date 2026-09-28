@@ -77,6 +77,7 @@ export async function runInteractiveSyntheticDemo(options) {
     dashboardUrl,
     hankoUrl,
     mailpitUrl,
+    adminPasswordFile,
     configPath,
     configWriterPath,
     manifestPath,
@@ -109,16 +110,16 @@ export async function runInteractiveSyntheticDemo(options) {
   await writePrivateJson(configPath, initialConfig);
   await chmod(runDirectory, 0o700);
   const admin = JSON.parse(await readFile(adminPath, "utf8"));
-  const staff = JSON.parse(await readFile(staffPath, "utf8"));
+  const adminPassword = adminPasswordFile ? (await readFile(adminPasswordFile, "utf8")).trim() : "";
+  if (!admin.username || !adminPassword) throw new Error("Synthetic staff login credentials are missing.");
   const sourceUrl = getSourceUrl();
   const desktopProfilePath = join(dirname(configPath), "electron-profile");
   const manifest = {
     syntheticDataOnly: true,
     dashboardOrigin: dashboardUrl,
     hankoOrigin: hankoUrl,
-    mailpitUrl,
-    adminSignInEmail: admin.email,
-    staffSignInEmail: staff.email,
+    adminUsername: admin.username,
+    adminPassword,
     syncConfigPath: configPath,
     desktopProfilePath,
     syncConfigWriter: configWriterPath,
@@ -132,9 +133,10 @@ export async function runInteractiveSyntheticDemo(options) {
   await writePrivateJson(manifestPath, manifest);
 
   process.stdout.write("\nInteractive synthetic Clarity V2 demo is ready.\n");
-  process.stdout.write(`Dashboard: ${dashboardUrl}\nHanko: ${hankoUrl}\nMailpit: ${mailpitUrl}\n`);
+  process.stdout.write(`Dashboard: ${dashboardUrl}\nHanko: ${hankoUrl}\n`);
   process.stdout.write(`Synthetic source Orthanc: ${sourceUrl}\n`);
-  process.stdout.write(`Hanko administrator sign-in email: ${admin.email}\n`);
+  process.stdout.write(`Synthetic staff administrator username: ${admin.username}\n`);
+  process.stdout.write(`Synthetic staff administrator password: ${adminPassword}\n`);
   process.stdout.write(`Private settings and credentials: ${manifestPath} (mode 0600)\n`);
   process.stdout.write(
     `Sync config: ${configPath} (mode 0600; Orthanc URL and authorization are intentionally blank until Settings Save)\n`,
@@ -143,7 +145,7 @@ export async function runInteractiveSyntheticDemo(options) {
     `To reopen Electron while this demo runs: CLARITY_DASHBOARD_ORIGIN=${shellQuote(dashboardUrl)} CLARITY_HANKO_ORIGIN=${shellQuote(hankoUrl)} CLARITY_ALLOW_LOOPBACK_HTTP=1 CLARITY_SYNC_CONFIG_PATH=${shellQuote(configPath)} CLARITY_SYNC_CONFIG_WRITER=${shellQuote(configWriterPath)} CLARITY_NODE_EXECUTABLE=${shellQuote(nodePath)} CLARITY_SYNTHETIC_DEMO=true CLARITY_DESKTOP_PROFILE_DIR=${shellQuote(desktopProfilePath)} pnpm --filter @clarity/desktop start\n`,
   );
   process.stdout.write(
-    "Sign in with the administrator email; open Mailpit to read its one-time passcode. Enter the synthetic source URL and proof/provided password in Settings, then Save.\n",
+    "Sign in with the synthetic administrator username and password above. Enter the synthetic source URL and proof/provided password in Settings, then Save.\n",
   );
   process.stdout.write(
     `Upload a generated study with: python3 deploy/cloud/scripts/upload-synthetic-dicom.py ${shellQuote(manifestPath)} [ct|mr|sr|pdf] [SYNTHETIC_LABEL]\nThe sync service uses the saved interval in Settings. Press Ctrl-C here to stop this demo and remove only its disposable Docker project.\n\n`,

@@ -10,6 +10,10 @@ through Mailpit. A later [Chromium proof](../evidence/16-staff-web-hanko.md)
 verified local cross-port browser cookie storage and protected-route use.
 Packaged Electron and production HTTPS domain behaviour remain untested.
 The [plan](../01-final-clarity-v2-plan.md) owns implementation choices and gates.
+A later [disposable username/password proof](../evidence/46-hanko-username-password.md)
+passed no-email registration, login, session validation, logout and fresh login
+against pinned Hanko v3.0.4. Clarity integration and hosted browser behaviour
+remain separate gates.
 
 ## Findings supported by primary sources
 
@@ -22,7 +26,7 @@ The [plan](../01-final-clarity-v2-plan.md) owns implementation choices and gates
 | GET sessions/validate is passive; POST sessions/validate updates session activity | [GET validation](https://docs.hanko.io/api-reference/public/session-management/validate-a-session), [POST validation](https://docs.hanko.io/api-reference/public/session-management/validate-a-session-1) | Background polling must not indefinitely extend human-session idle time |
 | Validation returns claims.subject, claims.session_id, expiration, issuer/audience and verified-email information; old user_id/expiration_time fields are deprecated | [Validation response](https://docs.hanko.io/api-reference/public/session-management/validate-a-session) | Normalize a versioned DTO at the server; do not confuse this response shape with raw JWT claim names |
 | Public JWKS are available and the API describes RS256 signing | [JWKS API](https://docs.hanko.io/api-reference/public/well-known/get-json-web-key-set) | Configure trusted issuer/key origin/algorithm and rotation tests; never discover a JWKS URL from an untrusted token |
-| Upstream Docker quickstart separates migration and service startup, with PostgreSQL and email delivery configuration | [Compose](https://github.com/teamhanko/hanko/blob/main/deploy/docker-compose/quickstart.yaml), [configuration](https://github.com/teamhanko/hanko/blob/main/deploy/docker-compose/config.yaml) | Treat it as an example: replace demo keys/passwords/old images, avoid public admin/management ports, use production SMTP |
+| Upstream Docker quickstart separates migration and service startup, with PostgreSQL and email delivery configuration | [Compose](https://github.com/teamhanko/hanko/blob/main/deploy/docker-compose/quickstart.yaml), [configuration](https://github.com/teamhanko/hanko/blob/main/deploy/docker-compose/config.yaml) | Treat it as an example: replace demo keys/passwords/old images, avoid public admin/management ports, and disable email delivery for the chosen staff profile |
 | Published import guidance uses UUID user identifiers and a Hanko Cloud Console workflow | [Import guide source](https://github.com/teamhanko/docs/blob/main/guides/import_export/import-export-users.mdx) | Do not promise one-click self-hosted Clerk import or transferable passkeys; V2 can enroll staff afresh |
 
 ## Recommended staff integration
@@ -32,13 +36,18 @@ migrations separate from Clarity's product schema and roles. Expose its public A
 behind HTTPS on an approved origin; keep admin and management interfaces private.
 Do not put auth-database access or Hanko administrator credentials in Electron.
 
-The first staff login method should be verified email passcode, with passkeys
-enabled only after the real device/release matrix passes. This is a design choice
-for predictable enrollment, not a claim that passkeys are unsupported. SMTP sender,
-delivery, recovery and rate-limit behaviour need real acceptance before rollout.
+The earlier verified-email passcode recommendation was superseded by the user's
+request for staff username/password sign-in with no mail integration or public
+signup. The synthetic Coolify profile disables Hanko email and signup. A private
+administrator procedure must create Hanko accounts with password verifiers in
+Hanko PostgreSQL, then link their subjects to Clarity staff identities. Clarity
+keeps roles and active status in its separate PostgreSQL database; it does not
+store passwords. The [closed-signup provisioning proof](../evidence/46-hanko-username-password.md)
+passed in disposable containers; hosted browser proof remains a separate gate.
+Administrator password reset and rate limits need acceptance before rollout.
 
-The server converts a validated session into `{ issuer, subject, sessionId,
-verifiedEmail, expiresAt }`, then looks up an explicit identity link to an active
+The server converts a validated session into trusted issuer, subject, session ID
+and expiry values, then looks up an explicit identity link to an active
 Clarity user and centre membership. Staff receive no permission merely by
 successfully registering with Hanko. Admin-approved membership is required;
 unknown identities get a clear no-access screen. Do not use mutable email as a
@@ -72,14 +81,15 @@ tested decision. Keep CSP strict and tokens out of URLs/logs.
 The proposed first desktop shell displays the hosted HTTPS Next.js dashboard in a
 sandboxed Electron window. Its staff session is separate from both the default
 external browser session and the machine synchronization credential. Test cookie
-persistence, restart, logout, OTP failure, keyboard access and recovery in the
+persistence, restart, logout, password failure, keyboard access and recovery in the
 packaged Windows/macOS app, not just Chrome.
 
 Electron documents macOS platform WebAuthn configuration and signing entitlements;
 device-bound Touch ID credentials are not equivalent to automatically synchronized
 iCloud passkeys. Do not promise a particular method based on Chromium support alone.
 Test Windows Hello, Mac hardware, security keys, enrollment and cancellation on the
-selected stable Electron version. Keep email recovery available. Sources:
+selected stable Electron version. Define and prove account recovery before a
+production release; the no-email synthetic profile has no email recovery. Sources:
 [Electron app/WebAuthn](https://www.electronjs.org/docs/latest/api/app),
 [Electron sessions](https://www.electronjs.org/docs/latest/api/session).
 
@@ -123,6 +133,9 @@ an emailed account are not substitutes for verified ownership of that number.
 - A disposable Hanko v3.0.4 server and Mailpit completed a synthetic
   registration/login/logout flow. No SDK, real SMTP account, persistent
   provider user or packaged browser login was tested.
+- A separate no-email username/password protocol proof passed three disposable
+  runs; it did not verify hosted cookie scope, Clarity membership integration,
+  browser Elements, or a recovery path.
 - Some rendered Hanko/Turbo pages failed in the web reader; official Hanko session
   and Turbo structure pages were retrieved read-only over HTTPS and inspected.
 - Upstream docs and main branches are mutable. Select exact compatible backend,
@@ -130,6 +143,7 @@ an emailed account are not substitutes for verified ownership of that number.
   configuration keys and paid-cloud versus self-hosted feature availability there.
 - Do not copy upstream development settings into production. Prove backup/restore
   of Hanko database plus signing/encryption keys, key rotation, session revocation,
-  no-access registration, SMTP outage and authority separation.
+  disabled public signup, unknown-identity denial, operator-only provisioning and
+  authority separation. Staff login has no mail delivery dependency.
 - License obligations are a release-owner review item. This document identifies
   upstream licenses; it does not make a legal determination about distribution.

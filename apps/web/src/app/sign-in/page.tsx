@@ -12,7 +12,9 @@ export default function SignInPage() {
       <section aria-labelledby="sign-in-title">
         <p className="eyebrow">STAFF ACCESS</p>
         <h1 id="sign-in-title">Sign in</h1>
-        <p className="page-description">Use your centre account to continue.</p>
+        <p className="page-description">
+          Use the staff username and password given to you by your administrator.
+        </p>
         <HankoAuth />
       </section>
     </main>

@@ -4,8 +4,8 @@ type: object
 title: V2 planning workspace
 universe: live
 status: verified
-updated: 2026-09-24
-revision: in-window-source-settings-2026-09-24
+updated: 2026-09-27
+revision: staff-only-login-2026-09-27
 ---
 
 # V2 planning workspace
@@ -48,7 +48,9 @@ No known external automation points into this newly created workspace.
 
 ## See
 
-[Plan v1.4](../../docs/01-final-clarity-v2-plan.md) and
+[Plan v1.8](../../docs/01-final-clarity-v2-plan.md) and
 [dated session evidence](../sessions/2026-09-23-v2-planning.md), including the
 [desktop clarification](../sessions/2026-09-24-desktop-onboarding-source-settings.md)
 and [in-window Settings correction](../sessions/2026-09-24-in-window-source-settings.md).
+The [Coolify test checkpoint](../sessions/2026-09-27-coolify-test-readiness.md)
+tracks the separate synthetic hosted-test scope.

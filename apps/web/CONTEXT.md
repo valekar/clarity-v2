@@ -3,8 +3,9 @@
 Input: Hanko session cookie and the dedicated V2 cloud services. Output:
 authorization-checked staff pages and scoped APIs. `/` redirects to `/sign-in`;
 Hanko owns authentication, while current Clarity PostgreSQL membership grants
-staff/admin access. New Hanko registrations have no workspace access until an
-administrator grants a membership.
+staff/admin access. Public signup is disabled for the staff deployment;
+administrators provision Hanko users and Clarity identity links before login.
+Unknown authenticated identities create no Clarity staff row and have no access.
 
 Protected Studies, Doctors and Settings use left navigation. Doctors lists and
 searches active directory entries and accepts Indian mobile numbers in its
